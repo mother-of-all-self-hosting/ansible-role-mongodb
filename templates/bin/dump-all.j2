@@ -1,0 +1,32 @@
+#!/bin/bash
+
+if [ $# -ne 1 ]; then
+	echo "Usage: "$0" <directory_path>"
+	echo "All databases will be dumped (using mongodump) to the specified directory"
+	exit 1
+fi
+
+directory_path=$1
+
+if [ ! -d "$directory_path" ]; then
+	echo "$directory_path does not exist."
+	exit 1
+fi
+
+docker_flags=''
+if [ -t 1 ]; then
+	# Got tty
+	docker_flags='-it'
+fi
+
+{{ devture_systemd_docker_base_host_command_docker }} run \
+	$docker_flags \
+	--rm \
+	--user={{ mongodb_uid }}:{{ mongodb_gid }} \
+	--cap-drop=ALL \
+	--env-file={{ mongodb_base_path }}/env \
+	--network={{ mongodb_container_network }} \
+	--mount type=bind,src=$directory_path,dst=/out \
+	--entrypoint=/bin/sh \
+	{{ mongodb_container_image }} \
+	-c 'mongodump --host={{ mongodb_identifier }} -u $MONGO_INITDB_ROOT_USERNAME -p $MONGO_INITDB_ROOT_PASSWORD --quiet --gzip -o /out'

@@ -1,0 +1,67 @@
+---
+
+- name: Ensure MongoDB paths exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: 0750
+    owner: "{{ mongodb_uid }}"
+    group: "{{ mongodb_gid }}"
+  with_items:
+    - "{{ mongodb_base_path }}"
+    - "{{ mongodb_bin_path }}"
+    - "{{ mongodb_config_path }}"
+    - "{{ mongodb_data_path }}"
+
+- name: Ensure MongoDB support files installed
+  ansible.builtin.template:
+    src: "{{ role_path }}/templates/{{ item.src }}"
+    dest: "{{ item.dst }}"
+    mode: "{{ item.mode }}"
+    owner: "{{ mongodb_uid }}"
+    group: "{{ mongodb_gid }}"
+  with_items:
+    - src: env.j2
+      dst: "{{ mongodb_base_path }}/env"
+      mode: 640
+    - src: mongosh.conf.j2
+      dst: "{{ mongodb_config_path }}/mongosh.conf"
+      mode: 640
+    - src: bin/cli.j2
+      dst: "{{ mongodb_bin_path }}/cli"
+      mode: 750
+    - src: bin/cli-non-interactive.j2
+      dst: "{{ mongodb_bin_path }}/cli-non-interactive"
+      mode: 750
+    - src: bin/dump-all.j2
+      dst: "{{ mongodb_bin_path }}/dump-all"
+      mode: 750
+
+- name: Ensure MongoDB container image is pulled
+  community.docker.docker_image:
+    name: "{{ mongodb_container_image }}"
+    source: "{{ 'pull' if ansible_version.major > 2 or ansible_version.minor > 7 else omit }}"
+    force_source: "{{ mongodb_container_image_force_pull if ansible_version.major > 2 or ansible_version.minor >= 8 else omit }}"
+    force: "{{ omit if ansible_version.major > 2 or ansible_version.minor >= 8 else mongodb_container_image_force_pull }}"
+  register: result
+  retries: "{{ devture_playbook_help_container_retries_count }}"
+  delay: "{{ devture_playbook_help_container_retries_delay }}"
+  until: result is not failed
+
+- name: Ensure MongoDB container network is created
+  community.general.docker_network:
+    name: "{{ mongodb_container_network }}"
+    driver: bridge
+
+- name: Ensure MongoDB systemd service is present
+  ansible.builtin.template:
+    src: "{{ role_path }}/templates/systemd/mongodb.service.j2"
+    dest: "{{ devture_systemd_docker_base_systemd_path }}/{{ mongodb_identifier }}.service"
+
+- name: Ensure managed MongoDB databases prepared
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/tasks/util/prepare_managed_databases.yml"
+    apply:
+      tags:
+        - always
+  when: "mongodb_managed_databases | length > 0"

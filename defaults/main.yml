@@ -1,0 +1,113 @@
+---
+
+# Project source code URL: https://github.com/mongodb/mongo
+
+mongodb_enabled: true
+
+mongodb_identifier: mongodb
+
+mongodb_uid: ''
+mongodb_gid: ''
+
+mongodb_version: 6.0.6
+
+mongodb_base_path: "/{{ mongodb_identifier }}"
+mongodb_data_path: "{{ mongodb_base_path }}/data"
+mongodb_bin_path: "{{ mongodb_base_path }}/bin"
+mongodb_config_path: "{{ mongodb_base_path }}/config"
+
+mongodb_container_image: "{{ mongodb_container_image_registry_prefix }}mongo:{{ mongodb_container_image_tag }}"
+mongodb_container_image_registry_prefix: docker.io/
+mongodb_container_image_tag: "{{ mongodb_version }}-jammy"
+mongodb_container_image_force_pull: "{{ mongodb_container_image.endswith(':latest') }}"
+
+# The base container network. It will be auto-created by this role if it doesn't exist already.
+mongodb_container_network: "{{ mongodb_identifier }}"
+
+# A list of additional container networks that the container would be connected to.
+# The role does not create these networks, so make sure they already exist.
+# Use this to expose this container to another reverse proxy, which runs in a different container network.
+mongodb_container_additional_networks: "{{ mongodb_container_additional_networks_auto + mongodb_container_additional_networks_custom }}"
+mongodb_container_additional_networks_auto: []
+mongodb_container_additional_networks_custom: []
+
+# Specifies how the container publishes its database port
+#
+# Takes an "<ip>:<port>" value (e.g. "127.0.0.1:27017"), just a port number or an empty string to not expose.
+mongodb_container_database_bind_port: ''
+
+# A list of additional "volumes" to mount in the container.
+#
+# See the `--mount` documentation for the `docker run` command.
+#
+# Example:
+# mongodb_container_additional_volumes:
+#   - type: bind
+#     src: /path/on/the/host
+#     dst: /data
+#   - type: bind
+#     src: /another-path/on/the/host
+#     dst: /read-only
+#     options: readonly
+mongodb_container_additional_volumes: []
+
+# A list of extra arguments to pass to the container
+mongodb_container_extra_arguments: []
+
+# Controls the MONGO_INITDB_ROOT_USERNAME environment variable
+mongodb_environment_variable_mongo_initdb_root_username: "{{ mongodb_root_username }}"
+
+# Controls the MONGO_INITDB_ROOT_PASSWORD environment variable
+mongodb_environment_variable_mongo_initdb_root_password: "{{ mongodb_root_password }}"
+
+# Additional environment variables.
+mongodb_environment_variables_additional_variables: ''
+
+# List of systemd services that mongodb.service depends on
+mongodb_systemd_required_services_list: "{{ mongodb_systemd_required_systemd_services_list_default + mongodb_systemd_required_systemd_services_list_auto + mongodb_systemd_required_systemd_services_list_custom }}"
+mongodb_systemd_required_systemd_services_list_default: ['docker.service']
+mongodb_systemd_required_systemd_services_list_auto: []
+mongodb_systemd_required_systemd_services_list_custom: []
+
+mongodb_root_username: "root"
+mongodb_root_password: ""
+
+# A list of databases (and their credentials) that this role will create and manage on the server.
+#
+# `mongodb_managed_databases_auto` is managed by the playbook.
+# Your own definitions should go into `mongodb_managed_databases_additional`
+# See `mongodb_managed_databases_additional` for the correct syntax.
+mongodb_managed_databases: "{{ mongodb_managed_databases_auto + mongodb_managed_databases_additional }}"
+
+# Additional/managed database definitions managed by the playbook.
+# To add your own, use `mongodb_managed_databases_additional`
+mongodb_managed_databases_auto: []
+
+# Your own additional/managed database definitions.
+#
+# mongodb_managed_databases_additional:
+#   - name: some_database
+#     username: some_username
+#     password: some_password
+#     roles: ["dbOwner"]
+#   - name: another_database
+#     username: another_username
+#     password: another_password
+#     # If not roles are specified, mongodb_managed_database_default_roles is used
+mongodb_managed_databases_additional: []
+
+# mongodb_managed_database_default_roles specifies the default roles that users will be created with, unless `roles` is explicitly specified in mongodb_managed_databases_additional entries
+# See https://www.mongodb.com/docs/manual/reference/built-in-roles/
+mongodb_managed_database_default_roles:
+  - readWrite
+  - dbAdmin
+
+# The number of seconds to wait after starting the MongoDB systemd service
+# and before trying to run scripts for initializing managed databases/users against it.
+#
+# For most (subsequent) runs, MongoDB would already be running, so no waiting will be happening at all.
+mongodb_managed_databases_mongodb_start_wait_timeout_seconds: 15
+
+# Controls the enableTelemetry configuration setting for mongosh.
+# See: https://www.mongodb.com/docs/mongodb-shell/reference/configure-shell-settings/
+mongodb_config_mongosh_enableTelemetry: false

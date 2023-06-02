@@ -1,0 +1,52 @@
+#jinja2: lstrip_blocks: "True"
+[Unit]
+Description=MongoDB ({{ mongodb_identifier }})
+{% for service in mongodb_systemd_required_services_list %}
+Requires={{ service }}
+After={{ service }}
+{% endfor %}
+DefaultDependencies=no
+
+[Service]
+Type=simple
+Environment="HOME={{ devture_systemd_docker_base_systemd_unit_home_path }}"
+ExecStartPre=-{{ devture_systemd_docker_base_host_command_sh }} -c '{{ devture_systemd_docker_base_host_command_docker }} kill {{ mongodb_identifier }} 2>/dev/null || true'
+ExecStartPre=-{{ devture_systemd_docker_base_host_command_sh }} -c '{{ devture_systemd_docker_base_host_command_docker }} rm {{ mongodb_identifier }} 2>/dev/null || true'
+
+ExecStartPre={{ devture_systemd_docker_base_host_command_docker }} create \
+			--rm \
+			--name={{ mongodb_identifier }} \
+			--log-driver=none \
+			--user={{ mongodb_uid }}:{{ mongodb_gid }} \
+			--cap-drop=ALL \
+			--read-only \
+			--network={{ mongodb_container_network }} \
+			{% if mongodb_container_database_bind_port %}
+			-p {{ mongodb_container_database_bind_port }}:27017 \
+			{% endif %}
+			--env-file={{ mongodb_base_path }}/env \
+			--tmpfs=/tmp:rw,noexec,nosuid,size=128m \
+			--mount type=bind,src={{ mongodb_data_path }},dst=/data/db \
+			{% for volume in mongodb_container_additional_volumes %}
+			--mount type={{ volume.type | default('bind' if '/' in volume.src else 'volume') }},src={{ volume.src }},dst={{ volume.dst }}{{ (',' + volume.options) if volume.options | default('') else '' }} \
+			{% endfor %}
+			{% for arg in mongodb_container_extra_arguments %}
+			{{ arg }} \
+			{% endfor %}
+			{{ mongodb_container_image }}
+
+{% for network in mongodb_container_additional_networks %}
+ExecStartPre={{ devture_systemd_docker_base_host_command_docker }} network connect {{ network }} {{ mongodb_identifier }}
+{% endfor %}
+
+ExecStart={{ devture_systemd_docker_base_host_command_docker }} start --attach {{ mongodb_identifier }}
+
+ExecStop=-{{ devture_systemd_docker_base_host_command_sh }} -c '{{ devture_systemd_docker_base_host_command_docker }} kill {{ mongodb_identifier }} 2>/dev/null || true'
+ExecStop=-{{ devture_systemd_docker_base_host_command_sh }} -c '{{ devture_systemd_docker_base_host_command_docker }} rm {{ mongodb_identifier }} 2>/dev/null || true'
+
+Restart=always
+RestartSec=30
+SyslogIdentifier={{ mongodb_identifier }}
+
+[Install]
+WantedBy=multi-user.target

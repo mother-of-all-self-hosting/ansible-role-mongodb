@@ -1,0 +1,43 @@
+---
+
+# It'd be better if this is belonged to `validate_config.yml`, but it would have to be some loop-within-a-loop there,
+# and that's ugly. We also don't expect this to catch errors often. It's more of a defensive last-minute check.
+- name: Fail if managed database data appears invalid
+  ansible.builtin.fail:
+    msg: "Managed database definition ({{ managed_db }} lacks a required key: {{ item }}"
+  when: "item not in managed_db"
+  with_items: "{{ ['name', 'username', 'password'] }}"
+
+# The script that we'll run against MongoDB is stored in a file that others can't read.
+# This file will be mounted into the container and fed to MongoDB (mongosh).
+# This way, we avoid passing sensitive data around in CLI commands that other users on the system can see.
+- name: Create managed database initialization script file for {{ managed_db.name }}
+  ansible.builtin.template:
+    src: "{{ role_path }}/templates/script/init-managed-db-user.js.j2"
+    dest: "/tmp/{{ mongodb_identifier }}-init-managed-db-user.js"
+    mode: 0600
+    owner: "{{ mongodb_uid }}"
+    group: "{{ mongodb_gid }}"
+
+- name: Execute MongoDB managed database initialization script file for {{ managed_db.name }}
+  ansible.builtin.command:
+    cmd: >-
+      {{ devture_systemd_docker_base_host_command_docker }} run
+      --rm
+      --user={{ mongodb_uid }}:{{ mongodb_gid }}
+      --cap-drop=ALL
+      --env-file={{ mongodb_base_path }}/env
+      --network={{ mongodb_container_network }}
+      --mount type=bind,src={{ mongodb_data_path }},dst=/data/db
+      --mount type=bind,src={{ mongodb_config_path }}/mongosh.conf,dst=/etc/mongosh.conf,ro
+      --mount type=bind,src=/tmp/{{ mongodb_identifier }}-init-managed-db-user.js,dst=/{{ mongodb_identifier }}-init-managed-db-user.js,ro
+      --entrypoint=/bin/sh
+      {{ mongodb_container_image }}
+      -c
+      'mongosh --host={{ mongodb_identifier }} -u $MONGO_INITDB_ROOT_USERNAME -p $MONGO_INITDB_ROOT_PASSWORD --file=/{{ mongodb_identifier }}-init-managed-db-user.js admin'
+  changed_when: true
+
+- name: Delete managed database initialization script file for {{ managed_db.name }}
+  ansible.builtin.file:
+    path: "/tmp/{{ mongodb_identifier }}-init-managed-db-user.js"
+    state: absent

@@ -1,0 +1,29 @@
+---
+
+- name: Ensure MongoDB is started
+  ansible.builtin.service:
+    name: "{{ mongodb_identifier }}"
+    state: started
+    daemon_reload: true
+  register: mongodb_ensure_started_result
+
+- name: Wait a bit, so that MongoDB can start
+  when: mongodb_ensure_started_result.changed | bool
+  ansible.builtin.wait_for:
+    timeout: "{{ mongodb_managed_databases_mongodb_start_wait_timeout_seconds }}"
+  delegate_to: 127.0.0.1
+  become: false
+
+- name: Prepare managed MongoDB database
+  ansible.builtin.include_tasks: "{{ role_path }}/tasks/util/prepare_managed_database.yml"
+  with_items: "{{ mongodb_managed_databases }}"
+  loop_control:
+    loop_var: managed_db
+  # Suppress logging to avoid dumping the credentials to the shell
+  no_log: true
+
+- name: Ensure MongoDB is stopped (if it previously was)
+  when: mongodb_ensure_started_result.changed | bool
+  ansible.builtin.service:
+    name: "{{ mongodb_identifier }}"
+    state: stopped
