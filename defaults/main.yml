@@ -9,7 +9,7 @@ mongodb_identifier: mongodb
 mongodb_uid: ''
 mongodb_gid: ''
 
-mongodb_version: 7.0.2
+mongodb_version: 7.0.4
 
 mongodb_base_path: "/{{ mongodb_identifier }}"
 mongodb_data_path: "{{ mongodb_base_path }}/data"
