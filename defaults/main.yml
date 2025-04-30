@@ -1,4 +1,8 @@
-# SPDX-FileCopyrightText: 2023 Slavi Pantaleev
+# SPDX-FileCopyrightText: 2023 - 2024 Nikita Chernyi
+# SPDX-FileCopyrightText: 2023 - 2025 Slavi Pantaleev
+# SPDX-FileCopyrightText: 2024 Sergio Durigan Junior
+# SPDX-FileCopyrightText: 2025 MASH project contributors
+# SPDX-FileCopyrightText: 2025 Suguru Hirahara
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -21,8 +25,10 @@ mongodb_bin_path: "{{ mongodb_base_path }}/bin"
 mongodb_config_path: "{{ mongodb_base_path }}/config"
 
 mongodb_container_image: "{{ mongodb_container_image_registry_prefix }}mongo:{{ mongodb_container_image_tag }}"
-mongodb_container_image_registry_prefix: docker.io/
 mongodb_container_image_tag: "{{ mongodb_version }}-jammy"
+mongodb_container_image_registry_prefix: "{{ mongodb_container_image_registry_prefix_upstream }}"
+mongodb_container_image_registry_prefix_upstream: "{{ mongodb_container_image_registry_prefix_upstream_default }}"
+mongodb_container_image_registry_prefix_upstream_default: docker.io/
 mongodb_container_image_force_pull: "{{ mongodb_container_image.endswith(':latest') }}"
 
 # The base container network. It will be auto-created by this role if it doesn't exist already.
