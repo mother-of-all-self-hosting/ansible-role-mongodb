@@ -38,6 +38,9 @@ mongodb_container_database_bind_port: ''
 # The base container network. It will be auto-created by this role if it doesn't exist already.
 mongodb_container_network: "{{ mongodb_identifier }}"
 
+# The port number in the container
+mongodb_container_http_port: 27017
+
 # A list of additional container networks that the container would be connected to.
 # The role does not create these networks, so make sure they already exist.
 # Use this to expose this container to another reverse proxy, which runs in a different container network.

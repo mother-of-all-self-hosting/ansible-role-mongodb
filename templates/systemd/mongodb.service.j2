@@ -27,7 +27,7 @@ ExecStartPre={{ devture_systemd_docker_base_host_command_docker }} create \
 			--read-only \
 			--network={{ mongodb_container_network }} \
 			{% if mongodb_container_database_bind_port %}
-			-p {{ mongodb_container_database_bind_port }}:27017 \
+			-p {{ mongodb_container_database_bind_port }}:{{ mongodb_container_http_port }} \
 			{% endif %}
 			--env-file={{ mongodb_base_path }}/env \
 			--tmpfs=/tmp:rw,noexec,nosuid,size=128m \
