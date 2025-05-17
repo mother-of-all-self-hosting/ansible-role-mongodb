@@ -93,7 +93,7 @@
   changed_when: mongodb_import_mongorestore_command_result.finished and mongodb_import_mongorestore_command_result.rc == 0
 
 - when: "mongodb_ensure_started_result.changed | bool"
-  name: Ensure MongoDB is stopped (if it previously was)
+  name: Ensure MongoDB systemd service is stopped (if it previously was)
   ansible.builtin.service:
     name: "{{ mongodb_identifier }}"
     state: stopped

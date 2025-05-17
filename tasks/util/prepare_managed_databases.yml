@@ -26,7 +26,7 @@
   # Suppress logging to avoid dumping the credentials to the shell
   no_log: true
 
-- name: Ensure MongoDB is stopped (if it previously was)
+- name: Ensure MongoDB systemd service is stopped (if it previously was)
   when: mongodb_ensure_started_result.changed | bool
   ansible.builtin.service:
     name: "{{ mongodb_identifier }}"
