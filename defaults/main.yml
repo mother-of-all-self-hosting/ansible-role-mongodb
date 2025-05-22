@@ -66,10 +66,10 @@ mongodb_container_additional_volumes: []
 mongodb_container_extra_arguments: []
 
 # List of systemd services that mongodb.service depends on
-mongodb_systemd_required_services_list: "{{ mongodb_systemd_required_systemd_services_list_default + mongodb_systemd_required_systemd_services_list_auto + mongodb_systemd_required_systemd_services_list_custom }}"
-mongodb_systemd_required_systemd_services_list_default: "{{ [devture_systemd_docker_base_docker_service_name] if devture_systemd_docker_base_docker_service_name else [] }}"
-mongodb_systemd_required_systemd_services_list_auto: []
-mongodb_systemd_required_systemd_services_list_custom: []
+mongodb_systemd_required_services_list: "{{ mongodb_systemd_required_services_list_default + mongodb_systemd_required_services_list_auto + mongodb_systemd_required_services_list_custom }}"
+mongodb_systemd_required_services_list_default: "{{ [devture_systemd_docker_base_docker_service_name] if devture_systemd_docker_base_docker_service_name else [] }}"
+mongodb_systemd_required_services_list_auto: []
+mongodb_systemd_required_services_list_custom: []
 
 # Controls the MONGO_INITDB_ROOT_USERNAME environment variable
 mongodb_environment_variable_mongo_initdb_root_username: "{{ mongodb_root_username }}"
