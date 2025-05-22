@@ -4,11 +4,14 @@
 
 ---
 
-- block:
-    - when: mongodb_enabled | bool
+- name: Perform MongoDB installation tasks
+  block:
+    - name: Validate MongoDB configuration
+      when: mongodb_enabled | bool
       ansible.builtin.include_tasks: "{{ role_path }}/tasks/validate_config.yml"
 
-    - when: mongodb_enabled | bool
+    - name: Install MongoDB
+      when: mongodb_enabled | bool
       ansible.builtin.include_tasks: "{{ role_path }}/tasks/install.yml"
   tags:
     - setup-all
@@ -16,14 +19,18 @@
     - install-all
     - install-mongodb
 
-- block:
-    - when: mongodb_enabled | bool
+- name: Perform MongoDB database import tasks
+  block:
+    - name: Import MongoDB database
+      when: mongodb_enabled | bool
       ansible.builtin.include_tasks: "{{ role_path }}/tasks/import.yml"
   tags:
     - import-mongodb
 
-- block:
-    - when: not mongodb_enabled | bool
+- name: Perform MongoDB uninstallation tasks
+  block:
+    - name: Uninstall MongoDB
+      when: not mongodb_enabled | bool
       ansible.builtin.include_tasks: "{{ role_path }}/tasks/uninstall.yml"
   tags:
     - setup-all
