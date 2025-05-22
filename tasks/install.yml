@@ -61,6 +61,7 @@
   ansible.builtin.template:
     src: "{{ role_path }}/templates/systemd/mongodb.service.j2"
     dest: "{{ devture_systemd_docker_base_systemd_path }}/{{ mongodb_identifier }}.service"
+    mode: 0644
 
 - name: Ensure managed MongoDB databases prepared
   ansible.builtin.include_tasks:
