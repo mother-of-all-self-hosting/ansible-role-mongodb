@@ -18,12 +18,37 @@
         enabled: false
         daemon_reload: true
 
-    - name: Ensure MongoDB systemd service does not exist
+    - name: Ensure MongoDB support files do not exist
       ansible.builtin.file:
-        path: "{{ devture_systemd_docker_base_systemd_path }}/{{ mongodb_identifier }}.service"
+        path: "{{ mongodb_base_path }}/{{ item }}"
+        state: absent
+      with_items:
+        - env
+
+    - name: Ensure MongoDB config does not exist
+      ansible.builtin.file:
+        path: "{{ mongodb_config_path }}"
         state: absent
 
-    - name: Ensure MongoDB path does not exist
+    - name: Ensure MongoDB scripts do not exist
       ansible.builtin.file:
-        path: "{{ mongodb_base_path }}"
+        path: "{{ mongodb_bin_path }}"
         state: absent
+
+- name: Check existence of MongoDB local data path
+  ansible.builtin.stat:
+    path: "{{ mongodb_data_path }}"
+  register: mongodb_data_path_stat
+
+# We just want to notify the user. Deleting data is too destructive.
+- name: Notify if MongoDB local data remains
+  ansible.builtin.set_fact:
+    devture_playbook_runtime_messages_list: |
+      {{
+        devture_playbook_runtime_messages_list | default([])
+        +
+        [
+          "NOTE: You are not using a local MongoDB database, but some old data remains from before in `{{ mongodb_data_path }}`. Feel free to delete it."
+        ]
+      }}
+  when: mongodb_data_path_stat.stat.exists | bool
