@@ -24,11 +24,7 @@
         state: absent
       with_items:
         - env
-
-    - name: Ensure MongoDB config does not exist
-      ansible.builtin.file:
-        path: "{{ mongodb_config_path }}"
-        state: absent
+        - mongosh.conf
 
     - name: Ensure MongoDB scripts do not exist
       ansible.builtin.file:

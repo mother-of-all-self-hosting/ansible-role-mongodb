@@ -14,7 +14,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 	--env-file={{ mongodb_base_path }}/env \
 	--network={{ mongodb_container_network }} \
 	--mount type=bind,src={{ mongodb_data_path }},dst=/data/db \
-	--mount type=bind,src={{ mongodb_config_path }}/mongosh.conf,dst=/etc/mongosh.conf,ro \
+	--mount type=bind,src={{ mongodb_base_path }}/mongosh.conf,dst=/etc/mongosh.conf,ro \
 	--entrypoint=/bin/sh \
 	{{ mongodb_container_image }} \
 	-c 'mongosh --host={{ mongodb_identifier }} -u $MONGO_INITDB_ROOT_USERNAME -p $MONGO_INITDB_ROOT_PASSWORD admin '$@

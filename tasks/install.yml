@@ -14,7 +14,6 @@
   with_items:
     - "{{ mongodb_base_path }}"
     - "{{ mongodb_bin_path }}"
-    - "{{ mongodb_config_path }}"
     - "{{ mongodb_data_path }}"
 
 - name: Ensure MongoDB support files installed
@@ -29,7 +28,7 @@
       dst: "{{ mongodb_base_path }}/env"
       mode: 640
     - src: mongosh.conf.j2
-      dst: "{{ mongodb_config_path }}/mongosh.conf"
+      dst: "{{ mongodb_base_path }}/mongosh.conf"
       mode: 640
     - src: bin/cli.j2
       dst: "{{ mongodb_bin_path }}/cli"

@@ -33,7 +33,7 @@
       --env-file={{ mongodb_base_path }}/env
       --network={{ mongodb_container_network }}
       --mount type=bind,src={{ mongodb_data_path }},dst=/data/db
-      --mount type=bind,src={{ mongodb_config_path }}/mongosh.conf,dst=/etc/mongosh.conf,ro
+      --mount type=bind,src={{ mongodb_base_path }}/mongosh.conf,dst=/etc/mongosh.conf,ro
       --mount type=bind,src=/tmp/{{ mongodb_identifier }}-init-managed-db-user.js,dst=/{{ mongodb_identifier }}-init-managed-db-user.js,ro
       --entrypoint=/bin/sh
       {{ mongodb_container_image }}
