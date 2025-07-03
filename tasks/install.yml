@@ -53,7 +53,7 @@
   until: result is not failed
 
 - name: Ensure MongoDB container network is created
-  community.general.docker_network:
+  community.docker.docker_network:
     name: "{{ mongodb_container_network }}"
     driver: bridge
 
