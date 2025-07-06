@@ -3,35 +3,32 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 ---
-
 - name: Perform MongoDB installation tasks
-  block:
-    - name: Validate MongoDB configuration
-      when: mongodb_enabled | bool
-      ansible.builtin.include_tasks: "{{ role_path }}/tasks/validate_config.yml"
-
-    - name: Install MongoDB
-      when: mongodb_enabled | bool
-      ansible.builtin.include_tasks: "{{ role_path }}/tasks/install.yml"
+  when: mongodb_enabled | bool
   tags:
     - setup-all
     - setup-mongodb
     - install-all
     - install-mongodb
+  block:
+    - name: Validate MongoDB configuration    
+      ansible.builtin.include_tasks: "{{ role_path }}/tasks/validate_config.yml"
+    - name: Install MongoDB
+      ansible.builtin.include_tasks: "{{ role_path }}/tasks/install.yml"
 
 - name: Perform MongoDB database import tasks
-  block:
-    - name: Import MongoDB database
-      when: mongodb_enabled | bool
-      ansible.builtin.include_tasks: "{{ role_path }}/tasks/import.yml"
+  when: mongodb_enabled | bool
   tags:
     - import-mongodb
+  block:
+    - name: Import MongoDB database    
+      ansible.builtin.include_tasks: "{{ role_path }}/tasks/import.yml"
 
 - name: Perform MongoDB uninstallation tasks
-  block:
-    - name: Uninstall MongoDB
-      when: not mongodb_enabled | bool
-      ansible.builtin.include_tasks: "{{ role_path }}/tasks/uninstall.yml"
+  when: not mongodb_enabled | bool
   tags:
     - setup-all
     - setup-mongodb
+  block:
+    - name: Uninstall MongoDB
+      ansible.builtin.include_tasks: "{{ role_path }}/tasks/uninstall.yml"
