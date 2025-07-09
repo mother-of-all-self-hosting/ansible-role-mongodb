@@ -5,58 +5,58 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 #}
 
 const prepareManagedDatabase = () => {
-	let managedDB = db.getSiblingDB({{ managed_db.name | to_json }});
+  let managedDB = db.getSiblingDB({{ managed_db.name | to_json }});
 
-	let authenticatedAsRoot = true;
+  let authenticatedAsRoot = true;
 
-	try {
-		console.log("Trying to authenticate with: ", {{ managed_db.username | to_json }});
+  try {
+    console.log("Trying to authenticate with: ", {{ managed_db.username | to_json }});
 
-		managedDB.auth({{ managed_db.username | to_json }}, {{ managed_db.password | to_json }});
+    managedDB.auth({{ managed_db.username | to_json }}, {{ managed_db.password | to_json }});
 
-		console.log("Authenticated as: ", {{ managed_db.username | to_json }});
+    console.log("Authenticated as: ", {{ managed_db.username | to_json }});
 
-		authenticatedAsRoot = false;
-	} catch (err) {
-		console.log("Auth error: ", err.message);
+    authenticatedAsRoot = false;
+  } catch (err) {
+    console.log("Auth error: ", err.message);
 
-		console.log("Re-authenticating with root");
+    console.log("Re-authenticating with root");
 
-		db.auth({{ mongodb_root_username | to_json }}, {{ mongodb_root_password | to_json }});
+    db.auth({{ mongodb_root_username | to_json }}, {{ mongodb_root_password | to_json }});
 
-		authenticatedAsRoot = true;
+    authenticatedAsRoot = true;
 
-		try {
-			console.log("Trying to create: ", {{ managed_db.username | to_json }});
+    try {
+      console.log("Trying to create: ", {{ managed_db.username | to_json }});
 
-			managedDB.createUser({
-				user: {{ managed_db.username | to_json }},
-				pwd: {{ managed_db.password | to_json }},
-				roles: []
-			});
+      managedDB.createUser({
+        user: {{ managed_db.username | to_json }},
+        pwd: {{ managed_db.password | to_json }},
+        roles: []
+      });
 
-			console.log("Created: ", {{ managed_db.username | to_json }});
-		} catch (err) {
-			console.log("Creation error: ", err.message);
+      console.log("Created: ", {{ managed_db.username | to_json }});
+    } catch (err) {
+      console.log("Creation error: ", err.message);
 
-			managedDB.changeUserPassword({{ managed_db.username | to_json }}, {{ managed_db.password | to_json }});
-		}
-	}
+      managedDB.changeUserPassword({{ managed_db.username | to_json }}, {{ managed_db.password | to_json }});
+    }
+  }
 
-	if (!authenticatedAsRoot) {
-		console.log("Re-authenticating with root");
+  if (!authenticatedAsRoot) {
+    console.log("Re-authenticating with root");
 
-		db.auth({{ mongodb_root_username | to_json }}, {{ mongodb_root_password | to_json }});
-	}
+    db.auth({{ mongodb_root_username | to_json }}, {{ mongodb_root_password | to_json }});
+  }
 
-	{% for role in managed_db.roles | default(mongodb_managed_database_default_roles) %}
-		console.log("Granting role to user: ", {{ role | to_json }}, {{ managed_db.username | to_json }});
+  {% for role in managed_db.roles | default(mongodb_managed_database_default_roles) %}
+    console.log("Granting role to user: ", {{ role | to_json }}, {{ managed_db.username | to_json }});
 
-		managedDB.grantRolesToUser({{ managed_db.username | to_json }}, [{
-			db: {{ managed_db.name | to_json }},
-			role: {{ role | to_json }}
-		}]);
-	{% endfor %}
+    managedDB.grantRolesToUser({{ managed_db.username | to_json }}, [{
+      db: {{ managed_db.name | to_json }},
+      role: {{ role | to_json }}
+    }]);
+  {% endfor %}
 };
 
 prepareManagedDatabase();
