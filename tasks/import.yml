@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 ---
-
 # Pre-checks
 
 - name: Fail if playbook called incorrectly
@@ -16,11 +15,10 @@
     path: "{{ mongodb_server_path_dump }}"
   register: result_mongodb_server_path_dump_stat
 
-- name: Fail if provided dump directory doesn't exists
+- name: Fail if provided dump directory does not exist
   ansible.builtin.fail:
     msg: "File cannot be found on the server at {{ mongodb_server_path_dump }}"
   when: "not result_mongodb_server_path_dump_stat.stat.exists"
-
 
 # Defaults
 
@@ -43,8 +41,8 @@
     daemon_reload: true
   register: mongodb_ensure_started_result
 
-- when: "mongodb_ensure_started_result.changed | bool"
-  name: Wait a bit, so that MongoDB can start
+- name: Wait a bit, so that MongoDB can start
+  when: "mongodb_ensure_started_result.changed | bool"
   ansible.builtin.wait_for:
     timeout: "{{ mongodb_start_wait_time }}"
   delegate_to: 127.0.0.1
@@ -78,10 +76,10 @@
     dummy: true
   with_items:
     - >-
-        Importing MongoDB database using the following command: `{{ mongodb_import_command }}`.
-        If this crashes, you can stop MongoDB (`systemctl stop {{ mongodb_identifier }}`),
-        delete its existing data (`rm -rf {{ mongodb_data_path }}`), start it again (`systemctl start {{ mongodb_identifier }}`)
-        and manually run the above import command directly on the server.
+      Importing MongoDB database using the following command: `{{ mongodb_import_command }}`.
+      If this crashes, you can stop MongoDB (`systemctl stop {{ mongodb_identifier }}`),
+      delete its existing data (`rm -rf {{ mongodb_data_path }}`), start it again (`systemctl start {{ mongodb_identifier }}`)
+      and manually run the above import command directly on the server.
 
 - name: Perform MongoDB database import
   ansible.builtin.command:
@@ -92,8 +90,8 @@
   failed_when: not mongodb_import_mongorestore_command_result.finished or mongodb_import_mongorestore_command_result.rc != 0
   changed_when: mongodb_import_mongorestore_command_result.finished and mongodb_import_mongorestore_command_result.rc == 0
 
-- when: "mongodb_ensure_started_result.changed | bool"
-  name: Ensure MongoDB systemd service is stopped (if it previously was)
+- name: Ensure MongoDB systemd service is stopped (if it previously was)
+  when: "mongodb_ensure_started_result.changed | bool"
   ansible.builtin.service:
     name: "{{ mongodb_identifier }}"
     state: stopped
