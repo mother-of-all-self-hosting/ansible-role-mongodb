@@ -53,8 +53,10 @@
 
 - name: Ensure MongoDB container network is created
   community.docker.docker_network:
+    enable_ipv6: "{{ devture_systemd_docker_base_ipv6_enabled }}"
     name: "{{ mongodb_container_network }}"
     driver: bridge
+    driver_options: "{{ devture_systemd_docker_base_container_networks_driver_options }}"
 
 - name: Ensure MongoDB systemd service is present
   ansible.builtin.template:
