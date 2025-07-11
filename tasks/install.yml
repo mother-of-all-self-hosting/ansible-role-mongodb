@@ -1,4 +1,4 @@
-# SPDX-FileCopyrightText: 2023 Slavi Pantaleev
+# SPDX-FileCopyrightText: 2023 - 2024 Slavi Pantaleev
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
@@ -17,27 +17,26 @@
 
 - name: Ensure MongoDB support files installed
   ansible.builtin.template:
-    src: "{{ role_path }}/templates/{{ item.src }}"
-    dest: "{{ item.dst }}"
-    mode: "{{ item.mode }}"
+    src: "{{ role_path }}/templates/{{ item }}.j2"
+    dest: "{{ mongodb_base_path }}/{{ item }}"
+    owner: "{{ mongodb_uid }}"
+    group: "{{ mongodb_gid }}"
+    mode: "0640"
+  with_items:
+    - env
+    - mongosh.conf
+
+- name: Ensure MongoDB scripts installed
+  ansible.builtin.template:
+    src: "{{ role_path }}/templates/bin/{{ item }}.j2"
+    dest: "{{ mongodb_bin_path }}/{{ item }}"
+    mode: "0750"
     owner: "{{ mongodb_uid }}"
     group: "{{ mongodb_gid }}"
   with_items:
-    - src: env.j2
-      dst: "{{ mongodb_base_path }}/env"
-      mode: 640
-    - src: mongosh.conf.j2
-      dst: "{{ mongodb_base_path }}/mongosh.conf"
-      mode: 640
-    - src: bin/cli.j2
-      dst: "{{ mongodb_bin_path }}/cli"
-      mode: 750
-    - src: bin/cli-non-interactive.j2
-      dst: "{{ mongodb_bin_path }}/cli-non-interactive"
-      mode: 750
-    - src: bin/dump-all.j2
-      dst: "{{ mongodb_bin_path }}/dump-all"
-      mode: 750
+    - cli
+    - cli-non-interactive
+    - dump-all
 
 - name: Ensure MongoDB container image is pulled via community.docker.docker_image
   when: devture_systemd_docker_base_container_image_pull_method == 'ansible-module'
