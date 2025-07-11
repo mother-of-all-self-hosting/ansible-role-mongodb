@@ -126,4 +126,4 @@ mongodb_managed_databases_mongodb_start_wait_timeout_seconds: 15
 
 # Controls the enableTelemetry configuration setting for mongosh.
 # See: https://www.mongodb.com/docs/mongodb-shell/reference/configure-shell-settings/
-mongodb_config_mongosh_enableTelemetry: false
+mongodb_config_mongosh_telemetry_enabled: false

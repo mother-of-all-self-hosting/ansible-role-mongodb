@@ -13,6 +13,7 @@
     - { "old": "mongodb_systemd_required_systemd_services_list_default", "new": "mongodb_systemd_required_services_list_default" }
     - { "old": "mongodb_systemd_required_systemd_services_list_auto", "new": "mongodb_systemd_required_services_list_auto" }
     - { "old": "mongodb_systemd_required_systemd_services_list_custom", "new": "mongodb_systemd_required_services_list_custom" }
+    - { "old": 'mongodb_config_mongosh_enableTelemetry', "new": "mongodb_config_mongosh_telemetry_enabled" }
     - { "old": 'mongodb_config_path', "new": "<Removed>" }
 
 - name: Fail if required MongoDB settings not defined

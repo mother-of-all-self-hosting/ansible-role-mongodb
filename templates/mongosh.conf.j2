@@ -5,4 +5,4 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 #}
 
 mongosh:
-  enableTelemetry: {{ mongodb_config_mongosh_enableTelemetry | to_json }}
+  enableTelemetry: {{ mongodb_config_mongosh_telemetry_enabled | to_json }}
