@@ -3,13 +3,13 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 ---
-
 - name: Check existence of MongoDB systemd service
   ansible.builtin.stat:
     path: "{{ devture_systemd_docker_base_systemd_path }}/{{ mongodb_identifier }}.service"
   register: mongodb_service_stat
 
-- when: mongodb_service_stat.stat.exists | bool
+- name: Uninstall MongoDB systemd services and files
+  when: mongodb_service_stat.stat.exists | bool
   block:
     - name: Ensure MongoDB systemd service is stopped
       ansible.builtin.service:
