@@ -23,7 +23,7 @@ mongodb_uid: ''
 mongodb_gid: ''
 
 mongodb_container_image: "{{ mongodb_container_image_registry_prefix }}mongo:{{ mongodb_container_image_tag }}"
-mongodb_container_image_tag: "{{ mongodb_version }}-jammy"
+mongodb_container_image_tag: "{{ mongodb_version }}"
 mongodb_container_image_registry_prefix: "{{ mongodb_container_image_registry_prefix_upstream }}"
 mongodb_container_image_registry_prefix_upstream: "{{ mongodb_container_image_registry_prefix_upstream_default }}"
 mongodb_container_image_registry_prefix_upstream_default: docker.io/
