@@ -18,7 +18,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 # Setting up MongoDB
 
-This is an [Ansible](https://www.ansible.com/) role which installs [MongoDB](https://mongodb.org) to run as a [Docker](https://www.docker.com/) container wrapped in a systemd service.
+This is an [Ansible](https://www.ansible.com/) role which installs [MongoDB](https://mongodb.com) to run as a [Docker](https://www.docker.com/) container wrapped in a systemd service.
 
 MongoDB is a source-available cross-platform document-oriented (NoSQL) database program.
 
