@@ -42,12 +42,14 @@
         cmd: "rmdir {{ mongodb_data_path }}"
       register: mongodb_data_path_deletion_result
       changed_when: mongodb_data_path_deletion_result.rc == 0
+      failed_when: false
 
     - name: Ensure MongoDB base path does not exist if empty
       ansible.builtin.command:
         cmd: "rmdir {{ mongodb_base_path }}"
       register: mongodb_base_path_deletion_result
       changed_when: mongodb_base_path_deletion_result.rc == 0
+      failed_when: false
 
     - name: Ensure MongoDB container network does not exist via community.docker.docker_network
       when: devture_systemd_docker_base_container_network_creation_method == 'ansible-module'
