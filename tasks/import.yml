@@ -34,7 +34,7 @@
 
 # Actual import work
 
-- name: Ensure MongoDB is started
+- name: Ensure MongoDB service is started
   ansible.builtin.service:
     name: "{{ mongodb_identifier }}"
     state: started
