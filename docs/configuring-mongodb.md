@@ -40,7 +40,7 @@ To enable MongoDB with this role, add the following configuration to your `vars.
 mongodb_enabled: true
 
 # Put a strong password below, generated with `pwgen -s 64 1` or in another way
-mongodb_root_password: ''
+mongodb_root_password: ""
 
 ########################################################################
 #                                                                      #
