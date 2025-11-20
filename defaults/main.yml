@@ -17,7 +17,7 @@ mongodb_data_path: "{{ mongodb_base_path }}/data"
 mongodb_bin_path: "{{ mongodb_base_path }}/bin"
 
 # renovate: datasource=docker depName=mongo versioning=semver
-mongodb_version: 8.2.1
+mongodb_version: 8.2.2
 
 mongodb_uid: ''
 mongodb_gid: ''
