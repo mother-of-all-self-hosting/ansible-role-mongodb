@@ -57,7 +57,9 @@ mongodb_container_additional_volumes_auto: []
 mongodb_container_additional_volumes_custom: []
 
 # A list of extra arguments to pass to the container
-mongodb_container_extra_arguments: []
+mongodb_container_extra_arguments: "{{ mongodb_container_extra_arguments_auto + mongodb_container_extra_arguments_custom }}"
+mongodb_container_extra_arguments_auto: []
+mongodb_container_extra_arguments_custom: []
 
 # List of systemd services that the MongoDB systemd service depends on
 mongodb_systemd_required_services_list: "{{ mongodb_systemd_required_services_list_default + mongodb_systemd_required_services_list_auto + mongodb_systemd_required_services_list_custom }}"
