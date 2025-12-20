@@ -71,6 +71,9 @@ mongodb_systemd_wanted_services_list_default: []
 mongodb_systemd_wanted_services_list_auto: []
 mongodb_systemd_wanted_services_list_custom: []
 
+# Specify the timezone
+mongodb_environment_variables_tz: UTC
+
 # Controls the MONGO_INITDB_ROOT_USERNAME environment variable
 mongodb_environment_variable_mongo_initdb_root_username: "{{ mongodb_root_username }}"
 
