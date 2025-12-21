@@ -19,8 +19,8 @@ mongodb_bin_path: "{{ mongodb_base_path }}/bin"
 # renovate: datasource=docker depName=mongo versioning=semver
 mongodb_version: 8.2.3
 
-mongodb_uid: ''
-mongodb_gid: ''
+mongodb_uid: ""
+mongodb_gid: ""
 
 mongodb_container_image: "{{ mongodb_container_image_registry_prefix }}mongo:{{ mongodb_container_image_tag }}"
 mongodb_container_image_tag: "{{ mongodb_version }}"
@@ -32,7 +32,7 @@ mongodb_container_image_force_pull: "{{ mongodb_container_image.endswith(':lates
 # Specifies how the container publishes its database port
 #
 # Takes an "<ip>:<port>" value (e.g. "127.0.0.1:27017"), just a port number or an empty string to not expose.
-mongodb_container_database_bind_port: ''
+mongodb_container_database_bind_port: ""
 
 # The base container network. It will be auto-created by this role if it doesn't exist already.
 mongodb_container_network: "{{ mongodb_identifier }}"
@@ -83,7 +83,7 @@ mongodb_environment_variable_mongo_initdb_root_username: "{{ mongodb_root_userna
 mongodb_environment_variable_mongo_initdb_root_password: "{{ mongodb_root_password }}"
 
 # Additional environment variables.
-mongodb_environment_variables_additional_variables: ''
+mongodb_environment_variables_additional_variables: ""
 
 mongodb_root_username: "root"
 mongodb_root_password: ""
