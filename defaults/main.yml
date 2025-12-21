@@ -56,7 +56,7 @@ mongodb_container_additional_volumes: "{{ mongodb_container_additional_volumes_a
 mongodb_container_additional_volumes_auto: []
 mongodb_container_additional_volumes_custom: []
 
-# A list of extra arguments to pass to the container
+# A list of extra arguments to pass to the container (`docker create` command)
 mongodb_container_extra_arguments: "{{ mongodb_container_extra_arguments_auto + mongodb_container_extra_arguments_custom }}"
 mongodb_container_extra_arguments_auto: []
 mongodb_container_extra_arguments_custom: []
