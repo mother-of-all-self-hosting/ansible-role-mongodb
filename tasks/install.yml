@@ -19,9 +19,9 @@
   ansible.builtin.template:
     src: "{{ role_path }}/templates/{{ item }}.j2"
     dest: "{{ mongodb_base_path }}/{{ item }}"
+    mode: "0640"
     owner: "{{ mongodb_uid }}"
     group: "{{ mongodb_gid }}"
-    mode: "0640"
   with_items:
     - env
     - mongosh.conf
