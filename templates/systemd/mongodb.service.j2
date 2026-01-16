@@ -33,11 +33,11 @@ ExecStartPre={{ devture_systemd_docker_base_host_command_docker }} create \
       -p {{ mongodb_container_database_bind_port }}:{{ mongodb_container_http_port }} \
       {% endif %}
       --env-file={{ mongodb_base_path }}/env \
-      --tmpfs=/tmp:rw,noexec,nosuid,size=128m \
       --mount type=bind,src={{ mongodb_data_path }},dst=/data/db \
       {% for volume in mongodb_container_additional_volumes %}
       --mount type={{ volume.type | default('bind' if '/' in volume.src else 'volume') }},src={{ volume.src }},dst={{ volume.dst }}{{ (',' + volume.options) if volume.options | default('') else '' }} \
       {% endfor %}
+      --tmpfs=/tmp:rw,noexec,nosuid,size=128m \
       {% for arg in mongodb_container_extra_arguments %}
       {{ arg }} \
       {% endfor %}
