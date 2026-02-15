@@ -37,6 +37,9 @@ mongodb_container_database_bind_port: ""
 # The base container network. It will be auto-created by this role if it doesn't exist already.
 mongodb_container_network: "{{ mongodb_identifier }}"
 
+# Control if the container network is deleted on uninstalling.
+mongodb_container_network_deletion_enabled: true
+
 # The port number in the container
 mongodb_container_http_port: 27017
 
