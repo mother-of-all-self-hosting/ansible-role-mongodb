@@ -112,28 +112,6 @@ mongodb_container_cleanup_command: |
   echo "Failed to remove stale container {{ mongodb_identifier }} after {{ mongodb_container_cleanup_timeout_seconds }} attempts" >&2;
   exit 1
 
-# Specify the timezone
-mongodb_environment_variables_tz: UTC
-
-# Controls the MONGO_INITDB_ROOT_USERNAME environment variable
-mongodb_environment_variable_mongo_initdb_root_username: "{{ mongodb_root_username }}"
-
-# Controls the MONGO_INITDB_ROOT_PASSWORD environment variable
-mongodb_environment_variable_mongo_initdb_root_password: "{{ mongodb_root_password }}"
-
-# Additional environment variables.
-mongodb_environment_variables_additional_variables: ""
-
-# mongodb_restart_necessary controls whether the MongoDB systemd
-# service will be restarted (when true) or merely started (when false) by the
-# systemd service manager role (when conditional restart is enabled).
-#
-# This value is automatically computed during installation based on whether
-# any configuration files, the systemd service file, or the container image changed.
-# The default of `false` means "no restart needed" — appropriate when the role's
-# installation tasks haven't run (e.g., due to --tags skipping them).
-mongodb_restart_necessary: false
-
 mongodb_root_username: "root"
 mongodb_root_password: ""
 
@@ -176,3 +154,25 @@ mongodb_managed_databases_mongodb_start_wait_timeout_seconds: 15
 # Controls the enableTelemetry configuration setting for mongosh.
 # See: https://www.mongodb.com/docs/mongodb-shell/reference/configure-shell-settings/
 mongodb_config_mongosh_telemetry_enabled: false
+
+# Specify the timezone
+mongodb_environment_variables_tz: UTC
+
+# Controls the MONGO_INITDB_ROOT_USERNAME environment variable
+mongodb_environment_variable_mongo_initdb_root_username: "{{ mongodb_root_username }}"
+
+# Controls the MONGO_INITDB_ROOT_PASSWORD environment variable
+mongodb_environment_variable_mongo_initdb_root_password: "{{ mongodb_root_password }}"
+
+# Additional environment variables.
+mongodb_environment_variables_additional_variables: ""
+
+# mongodb_restart_necessary controls whether the MongoDB systemd
+# service will be restarted (when true) or merely started (when false) by the
+# systemd service manager role (when conditional restart is enabled).
+#
+# This value is automatically computed during installation based on whether
+# any configuration files, the systemd service file, or the container image changed.
+# The default of `false` means "no restart needed" — appropriate when the role's
+# installation tasks haven't run (e.g., due to --tags skipping them).
+mongodb_restart_necessary: false
