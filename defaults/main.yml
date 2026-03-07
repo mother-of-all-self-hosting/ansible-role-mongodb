@@ -112,6 +112,8 @@ mongodb_container_cleanup_command: |
   echo "Failed to remove stale container {{ mongodb_identifier }} after {{ mongodb_container_cleanup_timeout_seconds }} attempts" >&2;
   exit 1
 
+mongodb_connection_hostname: "{{ mongodb_identifier }}"
+mongodb_connection_port: 27017
 mongodb_root_username: "root"
 mongodb_root_password: ""
 
