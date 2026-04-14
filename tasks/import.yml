@@ -5,7 +5,7 @@
 ---
 # Pre-checks
 
-- name: Fail if playbook called incorrectly
+- name: Fail if playbook called incorrectly for MongoDB
   ansible.builtin.fail:
     msg: "The `mongodb_server_path_dump` variable needs to be provided to this playbook, via --extra-vars"
   when: "mongodb_server_path_dump is not defined or mongodb_server_path_dump.startswith('<')"
