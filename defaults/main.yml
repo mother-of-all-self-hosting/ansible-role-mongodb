@@ -27,7 +27,6 @@ mongodb_container_image_tag: "{{ mongodb_version }}"
 mongodb_container_image_registry_prefix: "{{ mongodb_container_image_registry_prefix_upstream }}"
 mongodb_container_image_registry_prefix_upstream: "{{ mongodb_container_image_registry_prefix_upstream_default }}"
 mongodb_container_image_registry_prefix_upstream_default: docker.io/
-mongodb_container_image_force_pull: "{{ mongodb_container_image.endswith(':latest') }}"
 
 # Specify how the container publishes its database port (as defined by `mongodb_container_http_port`).
 #
