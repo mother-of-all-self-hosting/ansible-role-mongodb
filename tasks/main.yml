@@ -20,6 +20,7 @@
   when: mongodb_enabled | bool
   tags:
     - import-mongodb
+    - molecule-notest
   block:
     - name: Import MongoDB database
       ansible.builtin.include_tasks: "{{ role_path }}/tasks/import.yml"
