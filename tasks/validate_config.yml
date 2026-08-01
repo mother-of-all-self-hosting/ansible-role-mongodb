@@ -27,3 +27,4 @@
     - mongodb_uid
     - mongodb_gid
     - mongodb_container_network
+    - mongodb_root_password
