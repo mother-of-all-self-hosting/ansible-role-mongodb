@@ -1,14 +1,29 @@
 # SPDX-FileCopyrightText: 2026 Suguru Hirahara
 # SPDX-FileCopyrightText: 2026 spatterlight
+# SPDX-FileCopyrightText: 2026 Slavi Pantaleev
 #
 # SPDX-License-Identifier: AGPL-3.0-or-later
 
 ---
-- name: Verify MongoDB systemd service
+- name: Verify MongoDB
   hosts: all
   become: true
   gather_facts: false
+
   tasks:
+    # The role is not included in this playbook, so its defaults are not in
+    # scope. Reading defaults/main.yml directly keeps the version assertion
+    # below tied to the value that Renovate bumps, with nothing to keep in
+    # sync in this scenario. include_vars reads from the controller.
+    #
+    # Only values describing the role itself may be read from this namespace.
+    # Anything this scenario tunes (the passwords, for example) comes from the
+    # scenario's group_vars instead.
+    - name: Load the MongoDB role defaults
+      ansible.builtin.include_vars:
+        file: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}/defaults/main.yml"
+        name: mongodb_defaults
+
     - name: Wait for MongoDB service to become active (up to 180s)
       ansible.builtin.systemd:
         name: mongodb.service
@@ -29,7 +44,126 @@
         cmd: journalctl -xeu mongodb.service
       changed_when: false
 
-    - name: Show MongoDB systemd service status summary
+    # A systemd unit reaching "active" only means that `docker start` has not
+    # exited yet. mongod additionally spends a while preparing its data
+    # directory before it accepts connections, so the first probe here retries
+    # until the server itself answers.
+    #
+    # community.docker is deliberately avoided throughout this playbook: the
+    # linting environment in CI has no collections installed.
+    - name: Wait for MongoDB to answer a ping (up to 120s)
+      ansible.builtin.command:
+        cmd: >-
+          docker exec {{ mongodb_defaults.mongodb_identifier }}
+          mongosh --quiet
+          -u {{ mongodb_defaults.mongodb_root_username }} -p {{ mongodb_root_password }}
+          --authenticationDatabase admin
+          --eval 'db.adminCommand({ping: 1}).ok'
+      register: mongodb_ping
+      changed_when: false
+      until: mongodb_ping.rc == 0 and (mongodb_ping.stdout | trim) == '1'
+      retries: 24
+      delay: 5
+
+    # Compared exactly rather than searched for: `1` is a single character that
+    # would turn up by accident in almost any other output mongosh could emit.
+    - name: Assert MongoDB answers a ping
+      ansible.builtin.assert:
+        that: (mongodb_ping.stdout | trim) == '1'
+        fail_msg: "MongoDB did not answer a ping: {{ mongodb_ping.stdout | default('no output') }}"
+        success_msg: "MongoDB answers a ping"
+
+    # This scenario sets a root password, so an unauthenticated client must be
+    # turned away. Without this probe, the MONGO_INITDB_ROOT_* pair in env.j2
+    # could stop being rendered and everything else here would still pass.
+    #
+    # `ping` is deliberately not used for this: MongoDB answers it without
+    # authentication even when authorization is enabled, so it would report
+    # success against a wide-open server. `find` is a genuinely privileged
+    # command and is refused with "requires authentication".
+    - name: Read from MongoDB without authenticating
+      ansible.builtin.command:
+        cmd: >-
+          docker exec {{ mongodb_defaults.mongodb_identifier }}
+          mongosh --quiet
+          --eval 'db.getSiblingDB("molecule").probe.find().toArray()'
+      register: mongodb_unauthenticated
+      changed_when: false
+      failed_when: false
+
+    - name: Assert MongoDB rejects unauthenticated clients
+      ansible.builtin.assert:
+        that: (mongodb_unauthenticated.stdout + mongodb_unauthenticated.stderr) is search('requires authentication')
+        fail_msg: >-
+          MongoDB did not reject an unauthenticated client:
+          {{ mongodb_unauthenticated.stdout | default('no output') }}
+        success_msg: "MongoDB rejects unauthenticated clients"
+
+    # A write and a read back through a separate connection, which covers the
+    # whole path (client -> server -> storage engine) in both directions rather
+    # than just the fact that the server accepts connections.
+    - name: Write a document to MongoDB as root
+      ansible.builtin.command:
+        cmd: >-
+          docker exec {{ mongodb_defaults.mongodb_identifier }}
+          mongosh --quiet
+          -u {{ mongodb_defaults.mongodb_root_username }} -p {{ mongodb_root_password }}
+          --authenticationDatabase admin
+          --eval 'db.getSiblingDB("molecule").probe.insertOne({_id: "molecule-probe", value: "molecule-value"}).acknowledged'
+      register: mongodb_insert
+      changed_when: true
+
+    - name: Read the document back from MongoDB as root
+      ansible.builtin.command:
+        cmd: >-
+          docker exec {{ mongodb_defaults.mongodb_identifier }}
+          mongosh --quiet
+          -u {{ mongodb_defaults.mongodb_root_username }} -p {{ mongodb_root_password }}
+          --authenticationDatabase admin
+          --eval 'db.getSiblingDB("molecule").probe.findOne({_id: "molecule-probe"}).value'
+      register: mongodb_find
+      changed_when: false
+
+    - name: Assert the document was stored and read back
+      ansible.builtin.assert:
+        that:
+          - (mongodb_insert.stdout | trim) == 'true'
+          - mongodb_find.stdout is search('molecule-value')
+        fail_msg: >-
+          An insertOne/findOne round-trip failed
+          (insertOne: {{ mongodb_insert.stdout }}, findOne: {{ mongodb_find.stdout }})
+        success_msg: "An insertOne/findOne round-trip works"
+
+    # Tying the running version to `mongodb_version` is what makes this
+    # scenario a real test of the version that Renovate bumps: a bump that
+    # produces an unusable image cannot pass here.
+    - name: Query the version reported by the running MongoDB
+      ansible.builtin.command:
+        cmd: >-
+          docker exec {{ mongodb_defaults.mongodb_identifier }}
+          mongosh --quiet
+          -u {{ mongodb_defaults.mongodb_root_username }} -p {{ mongodb_root_password }}
+          --authenticationDatabase admin
+          --eval 'db.version()'
+      register: mongodb_version_output
+      changed_when: false
+
+    - name: Determine the version reported by the running MongoDB
+      ansible.builtin.set_fact:
+        mongodb_reported_version: "{{ mongodb_version_output.stdout | trim }}"
+
+    - name: Assert the running MongoDB is the version the role asks for
+      ansible.builtin.assert:
+        that: mongodb_reported_version.startswith(mongodb_defaults.mongodb_version | string)
+        fail_msg: >-
+          MongoDB reports version {{ mongodb_reported_version | default('none') }},
+          but the role asks for {{ mongodb_defaults.mongodb_version }}
+        success_msg: "MongoDB reports version {{ mongodb_reported_version }}"
+
+    - name: Show MongoDB verification summary
       ansible.builtin.debug:
         msg:
           - "MongoDB systemd: {{ mongodb_service.status.ActiveState }}"
+          - "Ping: {{ mongodb_ping.stdout }}"
+          - "insertOne/findOne round-trip: {{ mongodb_find.stdout }}"
+          - "Version: {{ mongodb_reported_version }}"

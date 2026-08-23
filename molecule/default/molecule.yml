@@ -34,7 +34,16 @@ provisioner:
         # Variables for MongoDB
         mongodb_uid: 1000
         mongodb_gid: 1000
-        mongodb_root_password: password
+
+        # Verification asserts that unauthenticated clients are turned away,
+        # which only tests anything when a password is actually configured.
+        mongodb_root_password: molecule-root-password
+
+        # `mongodb_managed_databases` is deliberately left empty here.
+        # Preparing a managed database re-templates, re-runs and re-deletes the
+        # initialization script on every run, so configuring one would make the
+        # role report itself as changed forever and fail the idempotence stage
+        # for reasons that have nothing to do with the change under test.
   env:
     # Workaround for https://github.com/ansible/molecule/issues/4391
     ANSIBLE_ROLES_PATH: ${MOLECULE_PROJECT_DIRECTORY}/..:/.ansible/roles:/usr/share/ansible/roles:/etc/ansible/roles:~/.ansible/roles
