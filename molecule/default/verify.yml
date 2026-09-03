@@ -152,7 +152,7 @@
       ansible.builtin.set_fact:
         mongodb_reported_version: "{{ mongodb_version_output.stdout | trim }}"
 
-    - name: Assert the running MongoDB is the version the role asks for
+    - name: Assert the running MongoDB is the version this role installs
       ansible.builtin.assert:
         that: mongodb_reported_version.startswith(mongodb_defaults.mongodb_version | string)
         fail_msg: >-
