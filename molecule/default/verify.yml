@@ -155,10 +155,10 @@
           but the role asks for {{ mongodb_defaults.mongodb_version }}
         success_msg: "MongoDB reports version {{ mongodb_reported_version }}"
 
-    - name: Show MongoDB verification summary
+    - name: Show the MongoDB verification summary
       ansible.builtin.debug:
         msg:
           - "MongoDB systemd: {{ mongodb_service.status.ActiveState }}"
-          - "Ping: {{ mongodb_ping.stdout }}"
-          - "insertOne/findOne round-trip: {{ mongodb_find.stdout }}"
-          - "Version: {{ mongodb_reported_version }}"
+          - "MongoDB version: {{ mongodb_reported_version }}"
+          - "MongoDB ping: {{ mongodb_ping.stdout }}"
+          - "MongoDB insertOne/findOne round-trip: {{ mongodb_find.stdout }}"
