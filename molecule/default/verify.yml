@@ -143,20 +143,16 @@
       register: mongodb_version_output
       changed_when: false
 
-    - name: Determine the version reported by the running MongoDB
-      ansible.builtin.set_fact:
-        mongodb_reported_version: "{{ mongodb_version_output.stdout | trim }}"
-
     - name: Assert the running MongoDB is the version this role installs
       ansible.builtin.assert:
-        that: mongodb_reported_version.startswith(mongodb_defaults.mongodb_version | string)
-        fail_msg: "MongoDB reports {{ mongodb_reported_version | default('none') }}, expected {{ mongodb_defaults.mongodb_version }}"
-        success_msg: "MongoDB reports {{ mongodb_reported_version }}"
+        that: mongodb_version_output.stdout == (mongodb_defaults.mongodb_version | string)
+        fail_msg: "MongoDB reports {{ mongodb_version_output.stdout | default('none') }}, expected {{ mongodb_defaults.mongodb_version }}"
+        success_msg: "MongoDB reports {{ mongodb_version_output.stdout }}"
 
     - name: Show the MongoDB verification summary
       ansible.builtin.debug:
         msg:
           - "MongoDB systemd: {{ mongodb_service.status.ActiveState }}"
-          - "MongoDB version: {{ mongodb_reported_version }}"
+          - "MongoDB version: {{ mongodb_version_output.stdout}}"
           - "MongoDB ping: {{ mongodb_ping.stdout }}"
           - "MongoDB insertOne/findOne round-trip: {{ mongodb_find.stdout }}"
