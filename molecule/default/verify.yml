@@ -132,7 +132,7 @@
     # Tying the running version to `mongodb_version` is what makes this
     # scenario a real test of the version that Renovate bumps: a bump that
     # produces an unusable image cannot pass here.
-    - name: Query the version reported by the running MongoDB
+    - name: Query the version of the running MongoDB
       ansible.builtin.command:
         cmd: >-
           docker exec {{ mongodb_defaults.mongodb_identifier }}
