@@ -145,7 +145,7 @@
 
     - name: Assert the running MongoDB is the version this role installs
       ansible.builtin.assert:
-        that: mongodb_version_output.stdout == (mongodb_defaults.mongodb_version | string)
+        that: mongodb_version_output.stdout == mongodb_defaults.mongodb_version | string
         fail_msg: "MongoDB reports {{ mongodb_version_output.stdout | default('none') }}, expected {{ mongodb_defaults.mongodb_version }}"
         success_msg: "MongoDB reports {{ mongodb_version_output.stdout }}"
 
