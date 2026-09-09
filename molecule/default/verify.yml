@@ -13,157 +13,157 @@
   tasks:
     - name: Verify that MongoDB works
       block:
-    # The role is not included in this playbook, so its defaults are not in
-    # scope. Reading defaults/main.yml directly ties the version assertion
-    # below.
-    - name: Load the role defaults
-      ansible.builtin.include_vars:
-        file: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}/defaults/main.yml"
-        name: mongodb_defaults
+        # The role is not included in this playbook, so its defaults are not in
+        # scope. Reading defaults/main.yml directly ties the version assertion
+        # below.
+        - name: Load the role defaults
+          ansible.builtin.include_vars:
+            file: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}/defaults/main.yml"
+            name: mongodb_defaults
 
-    - name: Wait for the MongoDB systemd service to become active (up to 180s)
-      ansible.builtin.systemd_service:
-        name: mongodb.service
-      register: mongodb_service
-      until: mongodb_service.status.ActiveState == 'active'
-      retries: 36
-      delay: 5
-      # So that giving up is reported by the assertion below rather than as a
-      # wall of systemd unit properties.
-      failed_when: false
+        - name: Wait for the MongoDB systemd service to become active (up to 180s)
+          ansible.builtin.systemd_service:
+            name: mongodb.service
+          register: mongodb_service
+          until: mongodb_service.status.ActiveState == 'active'
+          retries: 36
+          delay: 5
+          # So that giving up is reported by the assertion below rather than as a
+          # wall of systemd unit properties.
+          failed_when: false
 
-    # `Restart=always` in the systemd unit means that even a container which crashes
-    # and gets restarted reads as active here, so this is a precondition rather than
-    # a result.
-    - name: Assert the MongoDB systemd service is active
-      ansible.builtin.assert:
-        that: mongodb_service.status.ActiveState == 'active'
-        fail_msg: "mongodb.service is not active ({{ mongodb_service.status.ActiveState }})"
-        success_msg: "mongodb.service is active"
+        # `Restart=always` in the systemd unit means that even a container which crashes
+        # and gets restarted reads as active here, so this is a precondition rather than
+        # a result.
+        - name: Assert the MongoDB systemd service is active
+          ansible.builtin.assert:
+            that: mongodb_service.status.ActiveState == 'active'
+            fail_msg: "mongodb.service is not active ({{ mongodb_service.status.ActiveState }})"
+            success_msg: "mongodb.service is active"
 
-    - name: Retrieve the MongoDB systemd service log for debugging
-      when: mongodb_debug_service_enabled | bool
-      ansible.builtin.command:
-        cmd: journalctl --no-pager --output=cat --unit=mongodb.service
-      changed_when: false
+        - name: Retrieve the MongoDB systemd service log for debugging
+          when: mongodb_debug_service_enabled | bool
+          ansible.builtin.command:
+            cmd: journalctl --no-pager --output=cat --unit=mongodb.service
+          changed_when: false
 
-    # A systemd unit reaching "active" only means that `docker start` has not
-    # exited yet. mongod additionally spends a while preparing its data
-    # directory before it accepts connections, so the first probe here retries
-    # until the server itself answers.
-    #
-    # community.docker is deliberately avoided throughout this playbook: the
-    # linting environment in CI has no collections installed.
-    - name: Wait for MongoDB to answer a ping (up to 120s)
-      ansible.builtin.command:
-        cmd: >-
-          docker exec {{ mongodb_defaults.mongodb_identifier }}
-          mongosh --quiet
-          -u {{ mongodb_defaults.mongodb_root_username }} -p {{ mongodb_root_password }}
-          --authenticationDatabase admin
-          --eval 'db.adminCommand({ping: 1}).ok'
-      register: mongodb_ping
-      changed_when: false
-      until: mongodb_ping.rc == 0 and (mongodb_ping.stdout | trim) == '1'
-      retries: 24
-      delay: 5
+        # A systemd unit reaching "active" only means that `docker start` has not
+        # exited yet. mongod additionally spends a while preparing its data
+        # directory before it accepts connections, so the first probe here retries
+        # until the server itself answers.
+        #
+        # community.docker is deliberately avoided throughout this playbook: the
+        # linting environment in CI has no collections installed.
+        - name: Wait for MongoDB to answer a ping (up to 120s)
+          ansible.builtin.command:
+            cmd: >-
+              docker exec {{ mongodb_defaults.mongodb_identifier }}
+              mongosh --quiet
+              -u {{ mongodb_defaults.mongodb_root_username }} -p {{ mongodb_root_password }}
+              --authenticationDatabase admin
+              --eval 'db.adminCommand({ping: 1}).ok'
+          register: mongodb_ping
+          changed_when: false
+          until: mongodb_ping.rc == 0 and (mongodb_ping.stdout | trim) == '1'
+          retries: 24
+          delay: 5
 
-    # Compared exactly rather than searched for: `1` is a single character that
-    # would turn up by accident in almost any other output mongosh could emit.
-    - name: Assert MongoDB answers a ping
-      ansible.builtin.assert:
-        that: (mongodb_ping.stdout | trim) == '1'
-        fail_msg: "MongoDB did not answer a ping: {{ mongodb_ping.stdout | default('no output') }}"
-        success_msg: "MongoDB answers a ping"
+        # Compared exactly rather than searched for: `1` is a single character that
+        # would turn up by accident in almost any other output mongosh could emit.
+        - name: Assert MongoDB answers a ping
+          ansible.builtin.assert:
+            that: (mongodb_ping.stdout | trim) == '1'
+            fail_msg: "MongoDB did not answer a ping: {{ mongodb_ping.stdout | default('no output') }}"
+            success_msg: "MongoDB answers a ping"
 
-    # This scenario sets a root password, so an unauthenticated client must be
-    # turned away. Without this probe, the MONGO_INITDB_ROOT_* pair in env.j2
-    # could stop being rendered and everything else here would still pass.
-    #
-    # `ping` is deliberately not used for this: MongoDB answers it without
-    # authentication even when authorization is enabled, so it would report
-    # success against a wide-open server. `find` is a genuinely privileged
-    # command and is refused with "requires authentication".
-    - name: Read from MongoDB without authenticating
-      ansible.builtin.command:
-        cmd: >-
-          docker exec {{ mongodb_defaults.mongodb_identifier }}
-          mongosh --quiet
-          --eval 'db.getSiblingDB("molecule").probe.find().toArray()'
-      register: mongodb_unauthenticated
-      changed_when: false
-      failed_when: false
+        # This scenario sets a root password, so an unauthenticated client must be
+        # turned away. Without this probe, the MONGO_INITDB_ROOT_* pair in env.j2
+        # could stop being rendered and everything else here would still pass.
+        #
+        # `ping` is deliberately not used for this: MongoDB answers it without
+        # authentication even when authorization is enabled, so it would report
+        # success against a wide-open server. `find` is a genuinely privileged
+        # command and is refused with "requires authentication".
+        - name: Read from MongoDB without authenticating
+          ansible.builtin.command:
+            cmd: >-
+              docker exec {{ mongodb_defaults.mongodb_identifier }}
+              mongosh --quiet
+              --eval 'db.getSiblingDB("molecule").probe.find().toArray()'
+          register: mongodb_unauthenticated
+          changed_when: false
+          failed_when: false
 
-    - name: Assert MongoDB rejects unauthenticated clients
-      ansible.builtin.assert:
-        that: (mongodb_unauthenticated.stdout + mongodb_unauthenticated.stderr) is search('requires authentication')
-        fail_msg: >-
-          MongoDB did not reject an unauthenticated client:
-          {{ mongodb_unauthenticated.stdout | default('no output') }}
-        success_msg: "MongoDB rejects unauthenticated clients"
+        - name: Assert MongoDB rejects unauthenticated clients
+          ansible.builtin.assert:
+            that: (mongodb_unauthenticated.stdout + mongodb_unauthenticated.stderr) is search('requires authentication')
+            fail_msg: >-
+              MongoDB did not reject an unauthenticated client:
+              {{ mongodb_unauthenticated.stdout | default('no output') }}
+            success_msg: "MongoDB rejects unauthenticated clients"
 
-    # A write and a read back through a separate connection, which covers the
-    # whole path (client -> server -> storage engine) in both directions rather
-    # than just the fact that the server accepts connections.
-    - name: Write a document to MongoDB as root
-      ansible.builtin.command:
-        cmd: >-
-          docker exec {{ mongodb_defaults.mongodb_identifier }}
-          mongosh --quiet
-          -u {{ mongodb_defaults.mongodb_root_username }} -p {{ mongodb_root_password }}
-          --authenticationDatabase admin
-          --eval 'db.getSiblingDB("molecule").probe.insertOne({_id: "molecule-probe", value: "molecule-value"}).acknowledged'
-      register: mongodb_insert
-      changed_when: true
+        # A write and a read back through a separate connection, which covers the
+        # whole path (client -> server -> storage engine) in both directions rather
+        # than just the fact that the server accepts connections.
+        - name: Write a document to MongoDB as root
+          ansible.builtin.command:
+            cmd: >-
+              docker exec {{ mongodb_defaults.mongodb_identifier }}
+              mongosh --quiet
+              -u {{ mongodb_defaults.mongodb_root_username }} -p {{ mongodb_root_password }}
+              --authenticationDatabase admin
+              --eval 'db.getSiblingDB("molecule").probe.insertOne({_id: "molecule-probe", value: "molecule-value"}).acknowledged'
+          register: mongodb_insert
+          changed_when: true
 
-    - name: Read the document back from MongoDB as root
-      ansible.builtin.command:
-        cmd: >-
-          docker exec {{ mongodb_defaults.mongodb_identifier }}
-          mongosh --quiet
-          -u {{ mongodb_defaults.mongodb_root_username }} -p {{ mongodb_root_password }}
-          --authenticationDatabase admin
-          --eval 'db.getSiblingDB("molecule").probe.findOne({_id: "molecule-probe"}).value'
-      register: mongodb_find
-      changed_when: false
+        - name: Read the document back from MongoDB as root
+          ansible.builtin.command:
+            cmd: >-
+              docker exec {{ mongodb_defaults.mongodb_identifier }}
+              mongosh --quiet
+              -u {{ mongodb_defaults.mongodb_root_username }} -p {{ mongodb_root_password }}
+              --authenticationDatabase admin
+              --eval 'db.getSiblingDB("molecule").probe.findOne({_id: "molecule-probe"}).value'
+          register: mongodb_find
+          changed_when: false
 
-    - name: Assert the document was stored and read back
-      ansible.builtin.assert:
-        that:
-          - (mongodb_insert.stdout | trim) == 'true'
-          - mongodb_find.stdout is search('molecule-value')
-        fail_msg: >-
-          An insertOne/findOne round-trip failed
-          (insertOne: {{ mongodb_insert.stdout }}, findOne: {{ mongodb_find.stdout }})
-        success_msg: "An insertOne/findOne round-trip works"
+        - name: Assert the document was stored and read back
+          ansible.builtin.assert:
+            that:
+              - (mongodb_insert.stdout | trim) == 'true'
+              - mongodb_find.stdout is search('molecule-value')
+            fail_msg: >-
+              An insertOne/findOne round-trip failed
+              (insertOne: {{ mongodb_insert.stdout }}, findOne: {{ mongodb_find.stdout }})
+            success_msg: "An insertOne/findOne round-trip works"
 
-    # Tying the running version to `mongodb_version` is what makes this
-    # scenario a real test of the version that Renovate bumps: a bump that
-    # produces an unusable image cannot pass here.
-    - name: Query the version of the running MongoDB
-      ansible.builtin.command:
-        cmd: >-
-          docker exec {{ mongodb_defaults.mongodb_identifier }}
-          mongosh --quiet
-          -u {{ mongodb_defaults.mongodb_root_username }} -p {{ mongodb_root_password }}
-          --authenticationDatabase admin
-          --eval 'db.version()'
-      register: mongodb_version_reported
-      changed_when: false
+        # Tying the running version to `mongodb_version` is what makes this
+        # scenario a real test of the version that Renovate bumps: a bump that
+        # produces an unusable image cannot pass here.
+        - name: Query the version of the running MongoDB
+          ansible.builtin.command:
+            cmd: >-
+              docker exec {{ mongodb_defaults.mongodb_identifier }}
+              mongosh --quiet
+              -u {{ mongodb_defaults.mongodb_root_username }} -p {{ mongodb_root_password }}
+              --authenticationDatabase admin
+              --eval 'db.version()'
+          register: mongodb_version_reported
+          changed_when: false
 
-    - name: Assert the running MongoDB is the version this role installs
-      ansible.builtin.assert:
-        that: mongodb_version_reported.stdout == mongodb_defaults.mongodb_version | string
-        fail_msg: "MongoDB reports {{ mongodb_version_reported.stdout | default('none') }}, expected {{ mongodb_defaults.mongodb_version }}"
-        success_msg: "MongoDB reports {{ mongodb_version_reported.stdout }}"
+        - name: Assert the running MongoDB is the version this role installs
+          ansible.builtin.assert:
+            that: mongodb_version_reported.stdout == mongodb_defaults.mongodb_version | string
+            fail_msg: "MongoDB reports {{ mongodb_version_reported.stdout | default('none') }}, expected {{ mongodb_defaults.mongodb_version }}"
+            success_msg: "MongoDB reports {{ mongodb_version_reported.stdout }}"
 
-    - name: Show the MongoDB verification summary
-      ansible.builtin.debug:
-        msg:
-          - "MongoDB systemd: {{ mongodb_service.status.ActiveState }}"
-          - "MongoDB version: {{ mongodb_version_reported.stdout}}"
-          - "MongoDB ping: {{ mongodb_ping.stdout }}"
-          - "MongoDB insertOne/findOne round-trip: {{ mongodb_find.stdout }}"
+        - name: Show the MongoDB verification summary
+          ansible.builtin.debug:
+            msg:
+              - "MongoDB systemd: {{ mongodb_service.status.ActiveState }}"
+              - "MongoDB version: {{ mongodb_version_reported.stdout}}"
+              - "MongoDB ping: {{ mongodb_ping.stdout }}"
+              - "MongoDB insertOne/findOne round-trip: {{ mongodb_find.stdout }}"
 
       rescue:
         # Whatever went wrong, the reason is almost always in the systemd service log.
