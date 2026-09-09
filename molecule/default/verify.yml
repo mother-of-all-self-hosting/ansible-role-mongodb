@@ -11,6 +11,8 @@
   gather_facts: false
 
   tasks:
+    - name: Verify that MongoDB works
+      block:
     # The role is not included in this playbook, so its defaults are not in
     # scope. Reading defaults/main.yml directly ties the version assertion
     # below.
@@ -162,3 +164,19 @@
           - "MongoDB version: {{ mongodb_version_reported.stdout}}"
           - "MongoDB ping: {{ mongodb_ping.stdout }}"
           - "MongoDB insertOne/findOne round-trip: {{ mongodb_find.stdout }}"
+
+      rescue:
+        # Whatever went wrong, the reason is almost always in the systemd service log.
+        - name: Retrieve the MongoDB systemd service log
+          ansible.builtin.command:
+            cmd: journalctl --no-pager --output=cat --unit=mongodb.service
+          register: mongodb_service_log
+          changed_when: false
+
+        - name: Show the MongoDB systemd service log
+          ansible.builtin.debug:
+            var: mongodb_service_log.stdout_lines
+
+        - name: Fail because verification did not pass
+          ansible.builtin.fail:
+            msg: "MongoDB verification failed. The systemd service log is printed above."
