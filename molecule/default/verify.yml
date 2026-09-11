@@ -10,6 +10,10 @@
   become: true
   gather_facts: false
 
+  vars:
+    mongodb_verify_units:
+      - mongodb.service
+
   tasks:
     - name: Verify that MongoDB works
       block:
@@ -21,13 +25,14 @@
             file: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') }}/defaults/main.yml"
             name: mongodb_defaults
 
-        - name: Wait for the MongoDB systemd service to become active (up to 180s)
+        - name: Wait for the MongoDB systemd services to become active (up to 180s each)
           ansible.builtin.systemd_service:
-            name: mongodb.service
-          register: mongodb_service
-          until: mongodb_service.status.ActiveState == 'active'
+            name: "{{ item }}"
+          register: mongodb_services
+          until: mongodb_services.status.ActiveState == 'active'
           retries: 36
           delay: 5
+          loop: "{{ mongodb_verify_units }}"
           # So that giving up is reported by the assertion below rather than as a
           # wall of systemd unit properties.
           failed_when: false
@@ -35,17 +40,20 @@
         # `Restart=always` in the systemd unit means that even a container which crashes
         # and gets restarted reads as active here, so this is a precondition rather than
         # a result.
-        - name: Assert the MongoDB systemd service is active
+        - name: Assert the MongoDB systemd services are active
           ansible.builtin.assert:
-            that: mongodb_service.status.ActiveState == 'active'
-            fail_msg: "mongodb.service is not active ({{ mongodb_service.status.ActiveState }})"
-            success_msg: "mongodb.service is active"
+            that: mongodb_services.results | map(attribute='status.ActiveState') | unique | list == ['active']
+            fail_msg: >-
+              Not every service is active:
+              {{ dict(mongodb_verify_units | zip(mongodb_services.results | map(attribute='status.ActiveState'))) }}
+            success_msg: "Every systemd service is active"
 
-        - name: Retrieve the MongoDB systemd service log for debugging
+        - name: Retrieve the MongoDB systemd services log for debugging
           when: mongodb_debug_service_enabled | bool
           ansible.builtin.command:
-            cmd: journalctl --no-pager --output=cat --unit=mongodb.service
+            cmd: "journalctl --no-pager --output=cat --unit={{ item }}"
           changed_when: false
+          loop: "{{ mongodb_verify_units }}"
 
         # A systemd unit reaching "active" only means that `docker start` has not
         # exited yet. mongod additionally spends a while preparing its data
@@ -160,7 +168,7 @@
         - name: Show the MongoDB verification summary
           ansible.builtin.debug:
             msg:
-              - "MongoDB systemd: {{ mongodb_service.status.ActiveState }}"
+              - "MongoDB systemd: {% for unit, state in mongodb_verify_units | zip(mongodb_services.results | map(attribute='status.ActiveState')) %}{{ unit }} ({{ state }}){% if not loop.last %}, {% endif %}{% endfor %}"
               - "MongoDB version: {{ mongodb_version_reported.stdout}}"
               - "MongoDB ping: {{ mongodb_ping.stdout }}"
               - "MongoDB insertOne/findOne round-trip: {{ mongodb_find.stdout }}"
