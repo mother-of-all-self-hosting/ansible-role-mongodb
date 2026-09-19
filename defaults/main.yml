@@ -66,6 +66,12 @@ mongodb_container_extra_arguments: "{{ mongodb_container_extra_arguments_auto + 
 mongodb_container_extra_arguments_auto: []
 mongodb_container_extra_arguments_custom: []
 
+# A list of extra arguments to pass to the process inside the container
+# Example: ['--SOME_ARGUMENT']
+mongodb_process_extra_arguments: "{{ mongodb_process_extra_arguments_auto + mongodb_process_extra_arguments_custom }}"
+mongodb_process_extra_arguments_auto: []
+mongodb_process_extra_arguments_custom: []
+
 # List of systemd services that the MongoDB systemd service depends on
 mongodb_systemd_required_services_list: "{{ mongodb_systemd_required_services_list_default + mongodb_systemd_required_services_list_auto + mongodb_systemd_required_services_list_custom }}"
 mongodb_systemd_required_services_list_default: "{{ [devture_systemd_docker_base_docker_service_name] if devture_systemd_docker_base_docker_service_name else [] }}"
