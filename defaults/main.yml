@@ -19,6 +19,29 @@ mongodb_bin_path: "{{ mongodb_base_path }}/bin"
 # renovate: datasource=docker depName=mongo versioning=semver
 mongodb_version: 9.0.2
 
+# The feature compatibility versions (FCV) that each MongoDB release (major.minor) can start on.
+#
+# MongoDB refuses to start on data whose FCV is not in this list for its release.
+# A release accepts its own FCV, the FCV of the release before it, and the FCV of the last LTS release.
+# These come from `src/mongo/util/version/releases.yml` in the MongoDB source for the corresponding release.
+#
+# Each list must be in ascending order.
+#
+# The release that `mongodb_version` points to must be listed in `mongodb_startable_fcvs_default`.
+# A pre-commit hook (`bin/check-startable-fcvs.sh`) enforces this, so a new major or minor release
+# of MongoDB cannot be adopted without an entry here.
+#
+# If you run a release not listed here (by overriding `mongodb_version`), describe it in `mongodb_startable_fcvs_custom`.
+mongodb_startable_fcvs: "{{ mongodb_startable_fcvs_default | combine(mongodb_startable_fcvs_custom) }}"
+mongodb_startable_fcvs_default:
+  "6.0": ["5.0", "5.3", "6.0"]
+  "7.0": ["6.0", "6.3", "7.0"]
+  "8.0": ["7.0", "7.3", "8.0"]
+  "8.2": ["8.0", "8.1", "8.2"]
+  "8.3": ["8.0", "8.2", "8.3"]
+  "9.0": ["8.0", "8.3", "9.0"]
+mongodb_startable_fcvs_custom: {}
+
 mongodb_uid: ""
 mongodb_gid: ""
 

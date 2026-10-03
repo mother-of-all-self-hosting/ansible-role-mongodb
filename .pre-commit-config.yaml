@@ -18,6 +18,12 @@ repos:
         language: system
         pass_filenames: false
         files: '^(bin/compute-next-tag[.]sh|bin/test-compute-next-tag[.]sh|defaults/main[.]yml)$'
+      - id: check-startable-fcvs
+        name: check that mongodb_version's release is in mongodb_startable_fcvs_default
+        entry: bash bin/check-startable-fcvs.sh
+        language: system
+        pass_filenames: false
+        files: '^(bin/check-startable-fcvs[.]sh|defaults/main[.]yml)$'
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
