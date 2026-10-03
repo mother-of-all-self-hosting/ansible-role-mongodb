@@ -1,0 +1,152 @@
+# SPDX-FileCopyrightText: 2026 Slavi Pantaleev
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+---
+# A fresh installation cannot say anything about upgrading existing data. This
+# scenario therefore installs the MongoDB release preceding the one the role
+# pins first (the seed release), stores a document in it, and only then runs the
+# role at the release it pins.
+#
+# The seed release is derived from `mongodb_startable_fcvs_default` rather than
+# stated, so that it moves along whenever an entry for a new release is added.
+#
+# Before the upgrade, the seed's feature compatibility version (FCV) is lowered
+# to one that the pinned release cannot start on (if there is such a value), so
+# that the upgrade only works if the role raises it first.
+
+- name: Install the seed release of MongoDB
+  hosts: all
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Load the role defaults
+      ansible.builtin.include_vars:
+        file: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}/defaults/main.yml"
+        name: mongodb_molecule_defaults
+
+    - name: Determine the seed release of MongoDB
+      ansible.builtin.set_fact:
+        mongodb_molecule_seed_release: >-
+          {{
+            (mongodb_molecule_defaults.mongodb_startable_fcvs_default.keys() | list)[
+              (mongodb_molecule_defaults.mongodb_startable_fcvs_default.keys() | list).index(
+                mongodb_molecule_defaults.mongodb_version | string | regex_search('^[0-9]+[.][0-9]+')
+              ) - 1
+            ]
+          }}
+
+    # Docker Hub publishes a `<major>.<minor>` tag for every release line,
+    # which points to its latest patch release.
+    - name: Include roles for the seed release of MongoDB
+      ansible.builtin.include_role:
+        name: "{{ role_name }}"
+        public: true
+      loop:
+        - com.devture.ansible.role.playbook_help
+        - com.devture.ansible.role.systemd_docker_base
+        - "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') | basename }}"
+      loop_control:
+        loop_var: role_name
+      vars:
+        mongodb_version: "{{ mongodb_molecule_seed_release }}"
+
+    - name: Ensure systemd daemon is reloaded for the seed release of MongoDB
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Ensure the seed release of MongoDB is started
+      ansible.builtin.systemd_service:
+        name: mongodb.service
+        state: started
+
+    # This stays in the same play as the role inclusion above: the role's
+    # variables (`mongodb_identifier`, etc.) do not carry over into another play.
+    - name: Wait for the seed release of MongoDB to answer a ping (up to 120s)
+      ansible.builtin.command:
+        cmd: >-
+          docker exec {{ mongodb_identifier }}
+          mongosh --quiet
+          -u {{ mongodb_root_username }} -p {{ mongodb_root_password }}
+          --authenticationDatabase admin
+          --eval 'db.adminCommand({ping: 1}).ok'
+      register: mongodb_molecule_seed_ping
+      changed_when: false
+      until: mongodb_molecule_seed_ping.rc == 0 and (mongodb_molecule_seed_ping.stdout | trim) == '1'
+      retries: 24
+      delay: 5
+
+    - name: Write a document to the seed release of MongoDB
+      ansible.builtin.command:
+        cmd: >-
+          docker exec {{ mongodb_identifier }}
+          mongosh --quiet
+          -u {{ mongodb_root_username }} -p {{ mongodb_root_password }}
+          --authenticationDatabase admin
+          --eval 'db.getSiblingDB("molecule").probe.insertOne({_id: "molecule-upgrade-probe", value: "molecule-upgrade-value"}).acknowledged'
+      register: mongodb_molecule_seed_insert
+      changed_when: true
+      failed_when: (mongodb_molecule_seed_insert.stdout | trim) != 'true'
+
+    - name: Determine an FCV of the seed release that the pinned release cannot start on
+      ansible.builtin.set_fact:
+        mongodb_molecule_seed_lowered_fcv: >-
+          {{
+            mongodb_molecule_defaults.mongodb_startable_fcvs_default[mongodb_molecule_seed_release]
+            | reject('in', mongodb_molecule_defaults.mongodb_startable_fcvs_default[mongodb_molecule_defaults.mongodb_version | string | regex_search('^[0-9]+[.][0-9]+')])
+            | first
+            | default('')
+          }}
+
+    - name: Lower the FCV of the seed release of MongoDB to {{ mongodb_molecule_seed_lowered_fcv }}
+      when: mongodb_molecule_seed_lowered_fcv | length > 0
+      ansible.builtin.command:
+        cmd: >-
+          docker exec {{ mongodb_identifier }}
+          mongosh --quiet
+          -u {{ mongodb_root_username }} -p {{ mongodb_root_password }}
+          --authenticationDatabase admin
+          --eval 'db.adminCommand({setFeatureCompatibilityVersion: "{{ mongodb_molecule_seed_lowered_fcv }}", confirm: true}).ok'
+      register: mongodb_molecule_seed_lower_fcv
+      changed_when: true
+      failed_when: (mongodb_molecule_seed_lower_fcv.stdout | trim) != '1'
+
+    - name: Query the FCV of the seed release of MongoDB
+      ansible.builtin.command:
+        cmd: >-
+          docker exec {{ mongodb_identifier }}
+          mongosh --quiet
+          -u {{ mongodb_root_username }} -p {{ mongodb_root_password }}
+          --authenticationDatabase admin
+          --eval 'db.adminCommand({getParameter: 1, featureCompatibilityVersion: 1}).featureCompatibilityVersion.version'
+      register: mongodb_molecule_seed_fcv
+      changed_when: false
+
+    # The verifier runs as a separate playbook, so it reads these from here.
+    - name: Record the seed release of MongoDB and its FCV
+      ansible.builtin.copy:
+        content: "{{ {'release': mongodb_molecule_seed_release, 'fcv': mongodb_molecule_seed_fcv.stdout | trim} | to_json }}"
+        dest: /root/mongodb-molecule-seed.json
+        mode: "0600"
+
+- name: Upgrade MongoDB to the pinned release
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Include roles for the pinned release of MongoDB
+      ansible.builtin.include_role:
+        name: "{{ role_name }}"
+        public: true
+      loop:
+        - com.devture.ansible.role.playbook_help
+        - com.devture.ansible.role.systemd_docker_base
+        - "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') | basename }}"
+      loop_control:
+        loop_var: role_name
+
+    - name: Ensure MongoDB is restarted onto the pinned release
+      ansible.builtin.systemd_service:
+        name: mongodb.service
+        state: restarted
+        daemon_reload: true

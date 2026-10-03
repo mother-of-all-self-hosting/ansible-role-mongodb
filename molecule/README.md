@@ -43,11 +43,17 @@ pip3 install -r ./molecule/requirements.txt
 
 ## Scenarios
 
-Currently there is one testing scenario available.
-
 ### `default`
 
 Tests a standard MongoDB installation.
+
+### `upgrade`
+
+Tests upgrading existing data to the MongoDB release that the role pins.
+
+The release preceding the pinned one (as listed in `mongodb_startable_fcvs_default`) is installed first and a document is stored in it. Its feature compatibility version (FCV) is then lowered to one that the pinned release cannot start on (if there is such a value), so that the upgrade only works if the role raises it. The role is then run at the release it pins, and the service is restarted onto it.
+
+The scenario asserts that the upgraded MongoDB runs the pinned release, is on the FCV the role should have chosen, and still serves the document. It then asserts that running the role for a release which cannot start on that FCV aborts without touching the installation, and finally that the preceding release can still start on the upgraded data, which is what keeps going back possible.
 
 ## Running
 

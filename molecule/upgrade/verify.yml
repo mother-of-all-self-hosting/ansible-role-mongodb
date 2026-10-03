@@ -1,0 +1,212 @@
+# SPDX-FileCopyrightText: 2026 Slavi Pantaleev
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+---
+- name: Verify the MongoDB upgrade
+  hosts: all
+  become: true
+  # The roles included further below (to check that the role refuses to
+  # install a release which cannot start on the current FCV) need facts.
+  gather_facts: true
+
+  vars:
+    mongodb_molecule_mongosh: >-
+      docker exec mongodb
+      mongosh --quiet
+      -u {{ mongodb_molecule_defaults.mongodb_root_username }} -p {{ mongodb_root_password }}
+      --authenticationDatabase admin
+    mongodb_molecule_downgrade_container_name: mongodb-molecule-downgrade-check
+
+  tasks:
+    - name: Verify the MongoDB upgrade
+      block:
+        - name: Load the role defaults
+          ansible.builtin.include_vars:
+            file: "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') }}/defaults/main.yml"
+            name: mongodb_molecule_defaults
+
+        - name: Read what the converge recorded about the seed release
+          ansible.builtin.slurp:
+            src: /root/mongodb-molecule-seed.json
+          register: mongodb_molecule_seed_raw
+
+        - name: Determine the expectations
+          ansible.builtin.set_fact:
+            mongodb_molecule_seed: "{{ mongodb_molecule_seed_raw.content | b64decode | from_json }}"
+            mongodb_molecule_pinned_release: "{{ mongodb_molecule_defaults.mongodb_version | string | regex_search('^[0-9]+[.][0-9]+') }}"
+
+        # Mirrors what tasks/check_fcv.yml decides: an FCV the pinned release
+        # can start on is kept, anything else is raised to the lowest value
+        # that works and that the seed release could be set to.
+        - name: Determine the FCV that the role should have left MongoDB on
+          vars:
+            mongodb_molecule_pinned_startable: "{{ mongodb_molecule_defaults.mongodb_startable_fcvs_default[mongodb_molecule_pinned_release] }}"
+          ansible.builtin.set_fact:
+            mongodb_molecule_expected_fcv: >-
+              {{
+                mongodb_molecule_seed.fcv
+                if mongodb_molecule_pinned_startable is contains(mongodb_molecule_seed.fcv)
+                else (
+                  mongodb_molecule_pinned_startable
+                  | select('in', mongodb_molecule_defaults.mongodb_startable_fcvs_default[mongodb_molecule_seed.release])
+                  | select('version', mongodb_molecule_seed.fcv, '>')
+                  | first
+                )
+              }}
+
+        # Should the seed ever become the pinned release, this scenario would
+        # quietly stop testing an upgrade at all.
+        - name: Assert the seed release differs from the pinned release
+          ansible.builtin.assert:
+            that: mongodb_molecule_seed.release != mongodb_molecule_pinned_release
+            fail_msg: "The seed release ({{ mongodb_molecule_seed.release }}) is the pinned release, so nothing was upgraded"
+            success_msg: "Upgraded from MongoDB {{ mongodb_molecule_seed.release }} (FCV {{ mongodb_molecule_seed.fcv }}) to {{ mongodb_molecule_pinned_release }}"
+
+        - name: Wait for MongoDB to answer a ping (up to 120s)
+          ansible.builtin.command:
+            cmd: "{{ mongodb_molecule_mongosh }} --eval 'db.adminCommand({ping: 1}).ok'"
+          register: mongodb_molecule_ping
+          changed_when: false
+          until: mongodb_molecule_ping.rc == 0 and (mongodb_molecule_ping.stdout | trim) == '1'
+          retries: 24
+          delay: 5
+
+        - name: Query the version and FCV of the upgraded MongoDB
+          ansible.builtin.command:
+            cmd: >-
+              {{ mongodb_molecule_mongosh }}
+              --eval 'print(JSON.stringify({version: db.version(), fcv: db.adminCommand({getParameter: 1, featureCompatibilityVersion: 1}).featureCompatibilityVersion.version}))'
+          register: mongodb_molecule_upgraded_state_raw
+          changed_when: false
+
+        - name: Read the document stored by the seed release back from the upgraded MongoDB
+          ansible.builtin.command:
+            cmd: "{{ mongodb_molecule_mongosh }} --eval 'db.getSiblingDB(\"molecule\").probe.findOne({_id: \"molecule-upgrade-probe\"}).value'"
+          register: mongodb_molecule_upgraded_find
+          changed_when: false
+
+        - name: Assert MongoDB was upgraded with its data and the expected FCV
+          vars:
+            mongodb_molecule_upgraded_state: "{{ mongodb_molecule_upgraded_state_raw.stdout_lines | last | from_json }}"
+          ansible.builtin.assert:
+            that:
+              - mongodb_molecule_upgraded_state.version == mongodb_molecule_defaults.mongodb_version | string
+              - mongodb_molecule_upgraded_state.fcv == mongodb_molecule_expected_fcv
+              - mongodb_molecule_upgraded_find.stdout is search('molecule-upgrade-value')
+            fail_msg: >-
+              Expected MongoDB {{ mongodb_molecule_defaults.mongodb_version }} on FCV {{ mongodb_molecule_expected_fcv }}
+              with the seed's document, got {{ mongodb_molecule_upgraded_state }}
+              and {{ mongodb_molecule_upgraded_find.stdout | default('no document') }}
+            success_msg: >-
+              MongoDB {{ mongodb_molecule_upgraded_state.version }} is on FCV {{ mongodb_molecule_upgraded_state.fcv }}
+              and serves the document stored by the seed release
+
+        # Running the role for a release which cannot start on the current FCV
+        # must abort before installing anything, leaving the running MongoDB alone.
+        - name: Determine a release that cannot start on the current FCV
+          ansible.builtin.set_fact:
+            mongodb_molecule_unstartable_release: >-
+              {{
+                mongodb_molecule_defaults.mongodb_startable_fcvs_default
+                | dict2items
+                | rejectattr('value', 'contains', mongodb_molecule_expected_fcv)
+                | map(attribute='key')
+                | last
+              }}
+
+        - name: Try installing a release that cannot start on the current FCV
+          block:
+            - name: Include roles for MongoDB {{ mongodb_molecule_unstartable_release }}
+              ansible.builtin.include_role:
+                name: "{{ role_name }}"
+                public: true
+              loop:
+                - com.devture.ansible.role.playbook_help
+                - com.devture.ansible.role.systemd_docker_base
+                - "{{ lookup('ansible.builtin.env', 'MOLECULE_PROJECT_DIRECTORY') | basename }}"
+              loop_control:
+                loop_var: role_name
+              vars:
+                mongodb_version: "{{ mongodb_molecule_unstartable_release }}"
+
+            - name: Fail because the role did not abort
+              ansible.builtin.fail:
+                msg: "The role installed MongoDB {{ mongodb_molecule_unstartable_release }}, which cannot start on FCV {{ mongodb_molecule_expected_fcv }}"
+          rescue:
+            - name: Assert the role aborted because of the FCV
+              ansible.builtin.assert:
+                that: ansible_failed_result.msg | default('') is search('can only start on')
+                fail_msg: "The role failed, but not because of the FCV: {{ ansible_failed_result.msg | default(ansible_failed_result) }}"
+                success_msg: "The role refused to install MongoDB {{ mongodb_molecule_unstartable_release }}"
+
+        - name: Read the image of the MongoDB systemd service
+          ansible.builtin.command:
+            cmd: grep -c -F 'mongo:{{ mongodb_molecule_defaults.mongodb_version }} ' /etc/systemd/system/mongodb.service
+          register: mongodb_molecule_unit_image
+          changed_when: false
+          failed_when: false
+
+        - name: Assert the aborted run left MongoDB alone
+          ansible.builtin.assert:
+            that: (mongodb_molecule_unit_image.stdout | trim) == '1'
+            fail_msg: "The systemd service no longer runs mongo:{{ mongodb_molecule_defaults.mongodb_version }}"
+            success_msg: "The systemd service still runs mongo:{{ mongodb_molecule_defaults.mongodb_version }}"
+
+        # The FCV was raised no further than needed, so the seed release must
+        # still be able to start on the upgraded data.
+        - name: Ensure MongoDB is stopped, to check going back to the seed release
+          ansible.builtin.systemd_service:
+            name: mongodb.service
+            state: stopped
+
+        - name: Start the seed release on the upgraded data
+          ansible.builtin.command:
+            cmd: >-
+              docker run --detach
+              --name {{ mongodb_molecule_downgrade_container_name }}
+              --user {{ mongodb_uid }}:{{ mongodb_gid }}
+              --mount type=bind,src=/mongodb/data,dst=/data/db
+              mongo:{{ mongodb_molecule_seed.release }}
+          changed_when: true
+
+        - name: Read the document back from the seed release (up to 120s)
+          ansible.builtin.command:
+            cmd: >-
+              docker exec {{ mongodb_molecule_downgrade_container_name }}
+              mongosh --quiet
+              --eval 'db.getSiblingDB("molecule").probe.findOne({_id: "molecule-upgrade-probe"}).value'
+          register: mongodb_molecule_downgrade_find
+          changed_when: false
+          until: mongodb_molecule_downgrade_find.stdout is search('molecule-upgrade-value')
+          retries: 24
+          delay: 5
+          failed_when: false
+
+        - name: Assert the seed release still starts on the upgraded data
+          ansible.builtin.assert:
+            that: mongodb_molecule_downgrade_find.stdout is search('molecule-upgrade-value')
+            fail_msg: "MongoDB {{ mongodb_molecule_seed.release }} could not serve the upgraded data: {{ mongodb_molecule_downgrade_find.stdout }} {{ mongodb_molecule_downgrade_find.stderr }}"
+            success_msg: "MongoDB {{ mongodb_molecule_seed.release }} still starts on the upgraded data, so going back remains possible"
+
+      rescue:
+        - name: Retrieve the MongoDB systemd service log
+          ansible.builtin.command:
+            cmd: journalctl --no-pager --output=cat --unit=mongodb.service
+          register: mongodb_molecule_service_log
+          changed_when: false
+
+        - name: Show the MongoDB systemd service log
+          ansible.builtin.debug:
+            var: mongodb_molecule_service_log.stdout_lines
+
+        - name: Fail because verification did not pass
+          ansible.builtin.fail:
+            msg: "MongoDB upgrade verification failed. The systemd service log is printed above."
+
+      always:
+        - name: Remove the seed release container
+          ansible.builtin.command:
+            cmd: docker rm --force {{ mongodb_molecule_downgrade_container_name }}
+          changed_when: false
+          failed_when: false
