@@ -42,6 +42,33 @@ mongodb_startable_fcvs_default:
   "9.0": ["8.0", "8.3", "9.0"]
 mongodb_startable_fcvs_custom: {}
 
+# Controls whether the role checks, before installing anything, that the MongoDB release it is about to install
+# can start on the feature compatibility version (FCV) of the existing data.
+#
+# If it cannot, the role either raises the FCV on the running MongoDB (see `mongodb_fcv_auto_raise_enabled`)
+# or aborts, leaving the currently installed MongoDB (and the services depending on it) running.
+#
+# The check needs MongoDB to be running whenever there is existing data.
+# Fresh installations (no data yet) are not checked.
+mongodb_fcv_check_enabled: true
+
+# Controls whether the role raises the FCV of the running MongoDB, when the release it is about to install
+# cannot start on the current one.
+#
+# The FCV is only ever raised to the lowest value that the release about to be installed can start on,
+# so that going back to the previous release remains possible. It is never lowered automatically.
+mongodb_fcv_auto_raise_enabled: true
+
+# Forces the FCV of the running MongoDB to a specific value (e.g. "9.0"), raising or lowering it as needed.
+#
+# The value must be one that both the running release and the release about to be installed accept
+# (see `mongodb_startable_fcvs`). Leave empty to let the role decide.
+mongodb_fcv: ""
+
+# The MongoDB release (major.minor) that the FCV check treats as the one about to be installed.
+# It is derived from the container image tag. Override it if your tag does not start with the MongoDB version.
+mongodb_fcv_check_target_release: "{{ mongodb_container_image_tag | regex_search('^[0-9]+[.][0-9]+') | default('', true) }}"
+
 mongodb_uid: ""
 mongodb_gid: ""
 

@@ -96,6 +96,20 @@ The script to dump the database (`dump-all`) is installed to the directory speci
 
 Restoring a backup made this way can be done by importing it.
 
+### Upgrading to a new major release
+
+MongoDB refuses to start on data whose [feature compatibility version](https://www.mongodb.com/docs/manual/reference/command/setFeatureCompatibilityVersion/) (FCV) is not one its release accepts. To avoid MongoDB (and every service depending on it) going down after an upgrade, the role checks the FCV of the running MongoDB before installing anything:
+
+- If the release about to be installed can start on it, nothing changes. The FCV is not raised any further, so that going back to the previous release remains possible.
+- If the FCV can be raised (on the running MongoDB) to one the release about to be installed accepts, the role raises it to the lowest such value (unless `mongodb_fcv_auto_raise_enabled` is set to `false`).
+- Otherwise, the role aborts while the currently installed MongoDB keeps running. This happens when upgrading across too many releases at once (it then tells you which release to go through first), or when downgrading to a release that cannot start on the current FCV.
+
+Which FCVs each release can start on is described in `mongodb_startable_fcvs`. To force a specific FCV, set `mongodb_fcv`. To disable the check, set `mongodb_fcv_check_enabled: false`.
+
+**Note**: whenever there is existing data, the check needs MongoDB to be running. If it is not, the role aborts and asks you to start it.
+
+Taking a backup before upgrading to a new major release is still a good idea.
+
 ## Importing a database
 
 The role supports importing **gzipped** MongoDB database dumps (created with `mongodump --gzip -o /directory`).

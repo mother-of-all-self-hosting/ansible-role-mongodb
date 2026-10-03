@@ -13,6 +13,9 @@
   block:
     - name: Validate MongoDB configuration
       ansible.builtin.include_tasks: "{{ role_path }}/tasks/validate_config.yml"
+    - name: Check MongoDB feature compatibility version
+      when: mongodb_fcv_check_enabled | bool
+      ansible.builtin.include_tasks: "{{ role_path }}/tasks/check_fcv.yml"
     - name: Install MongoDB
       ansible.builtin.include_tasks: "{{ role_path }}/tasks/install.yml"
 

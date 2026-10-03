@@ -1,0 +1,190 @@
+# SPDX-FileCopyrightText: 2026 Slavi Pantaleev
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+---
+# Makes sure that the MongoDB release about to be installed can start on the feature
+# compatibility version (FCV) of the existing data, raising the FCV on the running MongoDB
+# if that is what it takes.
+#
+# This runs before anything is installed, so aborting here leaves the currently installed
+# MongoDB (and every service depending on it) running, instead of letting the new release
+# fail to start later with "UPGRADE PROBLEM: Found an invalid featureCompatibilityVersion document".
+#
+# Nothing is started or stopped here. The FCV can only be read from (and changed on) a running
+# MongoDB, so the running container is queried via `docker exec`.
+
+- name: Check whether MongoDB data exists
+  ansible.builtin.stat:
+    path: "{{ mongodb_data_path }}/WiredTiger"
+  register: mongodb_fcv_check_data_stat
+
+- name: Check the MongoDB FCV against the release about to be installed
+  when: mongodb_fcv_check_data_stat.stat.exists
+  block:
+    - name: Fail if the MongoDB release about to be installed is not described in mongodb_startable_fcvs
+      ansible.builtin.fail:
+        msg: >-
+          The MongoDB release about to be installed (`{{ mongodb_fcv_check_target_release }}`,
+          derived from `mongodb_fcv_check_target_release`) is not described in `mongodb_startable_fcvs`,
+          so it cannot be determined whether it can start on your existing data.
+          Describe it in `mongodb_startable_fcvs_custom`, or disable this check by setting `mongodb_fcv_check_enabled: false`.
+      when: mongodb_fcv_check_target_release not in mongodb_startable_fcvs
+
+    - name: Check whether the MongoDB container is running
+      ansible.builtin.command:
+        cmd: >-
+          {{ devture_systemd_docker_base_host_command_docker }} ps --quiet
+          --filter name=^{{ mongodb_identifier }}$
+          --filter status=running
+      register: mongodb_fcv_check_container_ps
+      changed_when: false
+      check_mode: false
+
+    - name: Fail if MongoDB is not running
+      ansible.builtin.fail:
+        msg: >-
+          There is existing MongoDB data in `{{ mongodb_data_path }}`, but MongoDB is not running,
+          so its feature compatibility version (FCV) cannot be checked against MongoDB {{ mongodb_fcv_check_target_release }}.
+          Start MongoDB and re-run, or disable this check by setting `mongodb_fcv_check_enabled: false`.
+      when: mongodb_fcv_check_container_ps.stdout | trim | length == 0
+
+    # The credentials are resolved inside the container (from its environment),
+    # so that they do not appear on the command line here.
+    #
+    # mongod may still be starting up (e.g. right after a restart), hence the retries.
+    - name: Query the running MongoDB for its release and FCV
+      ansible.builtin.command:
+        cmd: >-
+          {{ devture_systemd_docker_base_host_command_docker }} exec {{ mongodb_identifier }}
+          sh -c 'exec mongosh --quiet -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "$0"'
+          'print(JSON.stringify({version: db.version(), fcv: db.adminCommand({getParameter: 1, featureCompatibilityVersion: 1}).featureCompatibilityVersion}))'
+      register: mongodb_fcv_check_query
+      changed_when: false
+      check_mode: false
+      retries: 6
+      delay: 5
+      until: mongodb_fcv_check_query.rc == 0
+      failed_when: false
+
+    - name: Fail if the running MongoDB could not be queried
+      ansible.builtin.fail:
+        msg: >-
+          Could not query the running MongoDB for its feature compatibility version (FCV):
+          {{ mongodb_fcv_check_query.stderr | default('') }} {{ mongodb_fcv_check_query.stdout | default('') }}.
+          Make sure MongoDB is healthy and re-run, or disable this check by setting `mongodb_fcv_check_enabled: false`.
+      when: mongodb_fcv_check_query.rc != 0
+
+    - name: Determine the MongoDB FCV situation
+      ansible.builtin.set_fact:
+        mongodb_fcv_check_running_release: "{{ (mongodb_fcv_check_query.stdout_lines | last | from_json).version | regex_search('^[0-9]+[.][0-9]+') }}"
+        mongodb_fcv_check_current: "{{ (mongodb_fcv_check_query.stdout_lines | last | from_json).fcv.version }}"
+        mongodb_fcv_check_transition_target: "{{ (mongodb_fcv_check_query.stdout_lines | last | from_json).fcv.targetVersion | default('') }}"
+        mongodb_fcv_check_target_startable: "{{ mongodb_startable_fcvs[mongodb_fcv_check_target_release] }}"
+
+    # The FCVs that the running release can be set to are the ones it can start on.
+    # A running release missing from the table can at least be set to its own FCV.
+    - name: Determine which FCVs the running MongoDB can be set to
+      ansible.builtin.set_fact:
+        mongodb_fcv_check_running_settable: "{{ mongodb_startable_fcvs[mongodb_fcv_check_running_release] | default([mongodb_fcv_check_running_release]) }}"
+
+    # Unless forced via `mongodb_fcv`, the FCV is left alone if it works for the release about to be installed.
+    # Otherwise it is raised to the lowest value that works and that the running release can be set to,
+    # which keeps going back to the running release possible.
+    - name: Determine the MongoDB FCV to use
+      ansible.builtin.set_fact:
+        mongodb_fcv_check_desired: >-
+          {%- if mongodb_fcv | string | length > 0 -%}
+          {{ mongodb_fcv }}
+          {%- elif mongodb_fcv_check_current in mongodb_fcv_check_target_startable -%}
+          {{ mongodb_fcv_check_current }}
+          {%- else -%}
+          {{
+            mongodb_fcv_check_target_startable
+            | select('in', mongodb_fcv_check_running_settable)
+            | select('version', mongodb_fcv_check_current, '>')
+            | first
+            | default('')
+          }}
+          {%- endif -%}
+
+    - name: Fail if the MongoDB FCV is in the middle of a change
+      ansible.builtin.fail:
+        msg: >-
+          The feature compatibility version (FCV) of the running MongoDB is in the middle of a change
+          (from {{ mongodb_fcv_check_current }} to {{ mongodb_fcv_check_transition_target }}), likely because an earlier change was interrupted.
+          Complete it by running `db.adminCommand({setFeatureCompatibilityVersion: "{{ mongodb_fcv_check_transition_target }}", confirm: true})`
+          via the `cli` script in `{{ mongodb_bin_path }}`, then re-run.
+      when: mongodb_fcv_check_transition_target | length > 0
+
+    - name: Fail if the forced MongoDB FCV cannot be used
+      ansible.builtin.fail:
+        msg: >-
+          `mongodb_fcv` is set to `{{ mongodb_fcv }}`, but
+          {% if mongodb_fcv not in mongodb_fcv_check_target_startable -%}
+          MongoDB {{ mongodb_fcv_check_target_release }} (about to be installed) can only start on: {{ mongodb_fcv_check_target_startable | join(', ') }}.{%- else -%}
+          the running MongoDB {{ mongodb_fcv_check_running_release }} can only be set to: {{ mongodb_fcv_check_running_settable | join(', ') }}.{%- endif %}
+      when:
+        - mongodb_fcv | string | length > 0
+        - mongodb_fcv not in mongodb_fcv_check_target_startable or mongodb_fcv not in mongodb_fcv_check_running_settable
+
+    - name: Fail if the MongoDB FCV is too new for the release about to be installed
+      ansible.builtin.fail:
+        msg: >-
+          The feature compatibility version (FCV) of your existing MongoDB data is {{ mongodb_fcv_check_current }},
+          but MongoDB {{ mongodb_fcv_check_target_release }} (about to be installed) can only start on: {{ mongodb_fcv_check_target_startable | join(', ') }}.
+          Installing it would leave MongoDB unable to start.
+          If you are trying to downgrade, you can only go back to a release that accepts FCV {{ mongodb_fcv_check_current }},
+          or first lower the FCV (via `mongodb_fcv`) to one that both releases accept.
+      when:
+        - mongodb_fcv_check_desired | length == 0
+        - mongodb_fcv_check_current is version(mongodb_fcv_check_target_startable | last, '>')
+
+    - name: Fail if the MongoDB FCV is too old for the release about to be installed
+      ansible.builtin.fail:
+        msg: >-
+          {%- set ns = namespace(next_release='') -%}
+          {%- set reachable = [mongodb_fcv_check_current] + (mongodb_fcv_check_running_settable | select('version', mongodb_fcv_check_current, '>') | list) -%}
+          {%- for release, startable in mongodb_startable_fcvs.items() -%}
+          {%- if release is version(mongodb_fcv_check_running_release, '>') and release is version(mongodb_fcv_check_target_release, '<') and startable | intersect(reachable) | length > 0 -%}
+          {%- set ns.next_release = release -%}
+          {%- endif -%}
+          {%- endfor -%}
+          MongoDB {{ mongodb_fcv_check_target_release }} (about to be installed) can only start on these feature compatibility versions (FCV):
+          {{ mongodb_fcv_check_target_startable | join(', ') }}.
+          Your running MongoDB {{ mongodb_fcv_check_running_release }} is on FCV {{ mongodb_fcv_check_current }} and cannot be raised to any of them,
+          so this is too big of a jump.
+          {% if ns.next_release | length > 0 -%}
+          Upgrade to MongoDB {{ ns.next_release }} first: set `mongodb_version` to the latest {{ ns.next_release }}.x release,
+          re-run the playbook and start the services, then remove the override and re-run again.{%- else -%}
+          Upgrade through the intermediate MongoDB releases first, one at a time, by overriding `mongodb_version`.{%- endif %}
+      when:
+        - mongodb_fcv_check_desired | length == 0
+        - not mongodb_fcv_check_current is version(mongodb_fcv_check_target_startable | last, '>')
+
+    - name: Fail if the MongoDB FCV needs to be raised, but raising it automatically is disabled
+      ansible.builtin.fail:
+        msg: >-
+          MongoDB {{ mongodb_fcv_check_target_release }} (about to be installed) cannot start on the feature compatibility version (FCV)
+          of your existing data ({{ mongodb_fcv_check_current }}). It needs to be raised to {{ mongodb_fcv_check_desired }} first.
+          Enable `mongodb_fcv_auto_raise_enabled`, set `mongodb_fcv: "{{ mongodb_fcv_check_desired }}"`,
+          or run `db.adminCommand({setFeatureCompatibilityVersion: "{{ mongodb_fcv_check_desired }}", confirm: true})`
+          via the `cli` script in `{{ mongodb_bin_path }}`, then re-run.
+      when:
+        - mongodb_fcv_check_desired != mongodb_fcv_check_current
+        - mongodb_fcv | string | length == 0
+        - not mongodb_fcv_auto_raise_enabled | bool
+
+    # `confirm: true` is required since MongoDB 7.0, and rejected as an unknown field before it.
+    - name: Set the MongoDB FCV to {{ mongodb_fcv_check_desired }}
+      ansible.builtin.command:
+        cmd: >-
+          {{ devture_systemd_docker_base_host_command_docker }} exec {{ mongodb_identifier }}
+          sh -c 'exec mongosh --quiet -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "$0"'
+          'print(JSON.stringify(db.adminCommand({setFeatureCompatibilityVersion: "{{ mongodb_fcv_check_desired }}"{{ ", confirm: true" if mongodb_fcv_check_running_release is version("7.0", ">=") else "" }}})))'
+      register: mongodb_fcv_check_set_result
+      changed_when: true
+      failed_when: >-
+        mongodb_fcv_check_set_result.rc != 0
+        or (mongodb_fcv_check_set_result.stdout_lines | last | default('{}') | from_json).ok | default(0) != 1
+      when: mongodb_fcv_check_desired != mongodb_fcv_check_current
