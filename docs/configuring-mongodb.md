@@ -1,17 +1,20 @@
 <!--
-SPDX-FileCopyrightText: 2020 - 2024 MDAD project contributors
-SPDX-FileCopyrightText: 2020 - 2024 Slavi Pantaleev
-SPDX-FileCopyrightText: 2020 Aaron Raimist
+SPDX-FileCopyrightText: 2019-2024 Slavi Pantaleev
 SPDX-FileCopyrightText: 2020 Chris van Dijk
 SPDX-FileCopyrightText: 2020 Dominik Zajac
+SPDX-FileCopyrightText: 2020 Hardy Erlinger
 SPDX-FileCopyrightText: 2020 Mickaël Cornière
+SPDX-FileCopyrightText: 2020, 2021 Aaron Raimist
+SPDX-FileCopyrightText: 2020-2024 MDAD project contributors
+SPDX-FileCopyrightText: 2021 Marc Leuser
 SPDX-FileCopyrightText: 2022 François Darveau
 SPDX-FileCopyrightText: 2022 Julian Foad
 SPDX-FileCopyrightText: 2022 Warren Bailey
 SPDX-FileCopyrightText: 2023 Antonis Christofides
 SPDX-FileCopyrightText: 2023 Felix Stupp
 SPDX-FileCopyrightText: 2023 Pierre 'McFly' Marty
-SPDX-FileCopyrightText: 2024 - 2025 Suguru Hirahara
+SPDX-FileCopyrightText: 2024 Kim Brose
+SPDX-FileCopyrightText: 2024-2026 Suguru Hirahara
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 -->
@@ -73,6 +76,9 @@ After running the command for installation, the MongoDB instance becomes availab
 
 ### Getting a database terminal
 
+>[!WARNING]
+> **Modifying the database directly (especially as services are running) is dangerous and may lead to irreversible database corruption.** When in doubt, consider making a backup. You might also want to use a web user interface software like [Adminer](https://www.adminer.org/).
+
 You can use the CLI installed to the directory specified with `mongodb_bin_path` (default: `/mongodb/bin/`) for getting interactive terminal access using the MongoDB Shell [mongosh](https://www.mongodb.com/docs/mongodb-shell/).
 
 By default, this tool puts you in the `admin` database, which contains nothing.
@@ -84,9 +90,6 @@ To change to another database (for example `infisical`), run `use infisical`.
 To see the available tables in the current database, run `show tables`.
 
 You can then proceed to write queries. Example: `db.users.find()`
-
->[!WARNING]
-> Modifying the database directly (especially as services are running) is dangerous and may lead to irreversible database corruption. If you are not perfectly sure, create a backup!
 
 ## Maintenance
 
