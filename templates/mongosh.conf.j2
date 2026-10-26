@@ -6,3 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 
 mongosh:
   enableTelemetry: {{ mongodb_config_mongosh_telemetry_enabled | to_json }}
+{% if not mongodb_config_mongosh_telemetry_enabled | bool %}
+  # A user's own config (which mongosh creates with telemetry enabled) overrides `enableTelemetry`, but not this.
+  forceDisableTelemetry: true
+{% endif %}

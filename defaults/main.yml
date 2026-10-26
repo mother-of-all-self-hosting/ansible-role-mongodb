@@ -213,7 +213,8 @@ mongodb_managed_databases_mongodb_start_wait_timeout_seconds: 15
 mongodb_managed_databases_connection_retries: 10
 mongodb_managed_databases_connection_retry_delay_seconds: 3
 
-# Controls the enableTelemetry configuration setting for mongosh.
+# Controls the enableTelemetry configuration setting for mongosh (in the MongoDB container).
+# When disabled, telemetry is also force-disabled (`forceDisableTelemetry`), so that it cannot be turned on from within mongosh.
 # See: https://www.mongodb.com/docs/mongodb-shell/reference/configure-shell-settings/
 mongodb_config_mongosh_telemetry_enabled: false
 
