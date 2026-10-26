@@ -208,6 +208,11 @@ mongodb_managed_database_default_roles:
 # For most (subsequent) runs, MongoDB would already be running, so no waiting will be happening at all.
 mongodb_managed_databases_mongodb_start_wait_timeout_seconds: 15
 
+# Controls how many times (and how often) preparing managed databases retries connecting to MongoDB,
+# in case it is not (yet) accepting connections (e.g. while it is still starting).
+mongodb_managed_databases_connection_retries: 10
+mongodb_managed_databases_connection_retry_delay_seconds: 3
+
 # Controls the enableTelemetry configuration setting for mongosh.
 # See: https://www.mongodb.com/docs/mongodb-shell/reference/configure-shell-settings/
 mongodb_config_mongosh_telemetry_enabled: false

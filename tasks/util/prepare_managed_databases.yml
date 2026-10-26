@@ -17,13 +17,51 @@
   delegate_to: 127.0.0.1
   become: false
 
-- name: Prepare managed MongoDB database
-  ansible.builtin.include_tasks: "{{ role_path }}/tasks/util/prepare_managed_database.yml"
-  with_items: "{{ mongodb_managed_databases }}"
-  loop_control:
-    loop_var: managed_db
-  # Suppress logging to avoid dumping the credentials to the shell
+- name: Detect managed databases with invalid fields
+  ansible.builtin.set_fact:
+    mongodb_managed_databases_with_missing_keys: >-
+      {%- set result = [] -%}
+      {%- for db in mongodb_managed_databases -%}
+        {%- set missing = ['name', 'username', 'password'] | difference(db.keys() | list) -%}
+        {%- if missing | length > 0 -%}
+          {%- set _ = result.append({'name': db.name | default('<unknown>'), 'missing': missing}) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ result }}
   no_log: true
+
+- name: Fail if managed database data appears invalid
+  ansible.builtin.fail:
+    msg: >-
+      The following managed database definitions lack required keys:
+      {% for db in mongodb_managed_databases_with_missing_keys %}
+      {{ db.name }} (missing: {{ db.missing | join(', ') }}){% if not loop.last %}, {% endif %}
+      {% endfor %}
+  when: mongodb_managed_databases_with_missing_keys | length > 0
+
+# Only the commands needed are run (see the module), so that this only reports a change when something did change.
+# The script is passed to mongosh on stdin, so that passwords do not end up in files or on command lines.
+- name: Ensure managed databases are prepared
+  mongodb_managed_databases:
+    # mongosh runs inside the (already started) MongoDB container, as the superuser
+    # that the container's environment (see the `env` file) defines.
+    docker_command: "{{ devture_systemd_docker_base_host_command_docker.split() }}"
+    container: "{{ mongodb_identifier }}"
+    # Only the keys the module knows about are passed (definitions may contain others).
+    databases: |-
+      {%- set result = [] -%}
+      {%- for db in mongodb_managed_databases -%}
+        {%- set _ = result.append({
+          'name': db.name,
+          'username': db.username,
+          'password': db.password | string,
+          'roles': db.roles | default(mongodb_managed_database_default_roles),
+        }) -%}
+      {%- endfor -%}
+      {{ result }}
+    connection_retries: "{{ mongodb_managed_databases_connection_retries }}"
+    connection_retry_delay_seconds: "{{ mongodb_managed_databases_connection_retry_delay_seconds }}"
+  register: mongodb_managed_databases_preparation_result
 
 - name: Ensure MongoDB systemd service is stopped (if it previously was)
   when: mongodb_ensure_started_result.changed | bool

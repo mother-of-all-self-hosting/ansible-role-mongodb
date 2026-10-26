@@ -45,7 +45,9 @@ pip3 install -r ./molecule/requirements.txt
 
 ### `default`
 
-Tests a standard MongoDB installation.
+Tests a standard MongoDB installation with a managed database.
+
+Converging a second time must not change anything (idempotence). The verifier then prepares the managed database again (no change), with a changed password, and with the original one again, asserting each time what changed and that the user can log in with the expected password only.
 
 ### `upgrade`
 

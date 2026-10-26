@@ -1,0 +1,43 @@
+# SPDX-FileCopyrightText: 2026 Slavi Pantaleev
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+---
+# Authenticating against the managed database like a service would, and writing to it,
+# which needs the roles the user was granted.
+- name: Write to the managed database as its user ({{ mongodb_verify_case }})
+  ansible.builtin.command:
+    argv:
+      - docker
+      - exec
+      - mongodb
+      - mongosh
+      - --quiet
+      - --username={{ mongodb_verify_managed_db.username }}
+      - --password={{ item }}
+      - --authenticationDatabase={{ mongodb_verify_managed_db.name }}
+      - --eval=db.getSiblingDB("{{ mongodb_verify_managed_db.name }}").probe.insertOne({}).acknowledged
+  register: mongodb_verify_logins
+  changed_when: false
+  failed_when: false
+  loop:
+    - "{{ mongodb_verify_password }}"
+    - "{{ mongodb_verify_wrong_password }}"
+
+- name: Assert the managed database is prepared ({{ mongodb_verify_case }})
+  ansible.builtin.assert:
+    that:
+      - mongodb_managed_databases_preparation_result.changes == mongodb_verify_expected_changes
+      - mongodb_managed_databases_preparation_result.changed == (mongodb_verify_expected_changes | length > 0)
+      - mongodb_verify_logins.results[0].rc == 0
+      - mongodb_verify_logins.results[0].stdout == 'true'
+      - mongodb_verify_logins.results[1].rc != 0
+    fail_msg: >-
+      After {{ mongodb_verify_case }}:
+      changes {{ mongodb_managed_databases_preparation_result.changes }} (expected {{ mongodb_verify_expected_changes }}),
+      write with the expected password (rc={{ mongodb_verify_logins.results[0].rc }}):
+      `{{ mongodb_verify_logins.results[0].stdout }}{{ mongodb_verify_logins.results[0].stderr }}`,
+      write with the other password (rc={{ mongodb_verify_logins.results[1].rc }})
+    success_msg: >-
+      After {{ mongodb_verify_case }}: changes {{ mongodb_managed_databases_preparation_result.changes }},
+      and `{{ mongodb_verify_managed_db.username }}` can log in (and write) with the expected password only

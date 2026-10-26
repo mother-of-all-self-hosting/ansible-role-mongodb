@@ -228,3 +228,6 @@
         - name: Fail because verification did not pass
           ansible.builtin.fail:
             msg: "MongoDB verification failed. The systemd service log is printed above."
+
+- name: Verify MongoDB managed databases
+  ansible.builtin.import_playbook: verify_managed_databases.yml

@@ -28,6 +28,20 @@ platforms:
     cgroupns_mode: host
     privileged: true
     pre_build_image: true
+scenario:
+  test_sequence:
+    - dependency
+    - cleanup
+    - destroy
+    - syntax
+    - create
+    - prepare
+    - converge
+    - idempotence
+    - side_effect
+    - verify
+    - cleanup
+    - destroy
 provisioner:
   name: ansible
   config_options:
@@ -48,11 +62,13 @@ provisioner:
         # which only tests anything when a password is actually configured.
         mongodb_root_password: molecule-root-password
 
-        # `mongodb_managed_databases` is deliberately left empty here.
-        # Preparing a managed database re-templates, re-runs and re-deletes the
-        # initialization script on every run, so configuring one would make the
-        # role report itself as changed forever and fail the idempotence stage
-        # for reasons that have nothing to do with the change under test.
+        # A managed database exercises tasks/util/prepare_managed_databases.yml
+        # and the module it runs, and gives the verifier an unprivileged account
+        # to log in with.
+        mongodb_managed_databases_additional:
+          - name: molecule_db
+            username: molecule_user
+            password: molecule-password
   env:
     # Workaround for https://github.com/ansible/molecule/issues/4391
     ANSIBLE_ROLES_PATH: ${MOLECULE_PROJECT_DIRECTORY}/..:/.ansible/roles:/usr/share/ansible/roles:/etc/ansible/roles:~/.ansible/roles
