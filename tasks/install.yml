@@ -38,7 +38,6 @@
     - cli
     - cli-non-interactive
     - dump-all
-  register: mongodb_scripts_result
 
 - name: Ensure MongoDB container image is pulled via community.docker.docker_image_pull
   when: devture_systemd_docker_base_container_image_pull_method == 'ansible-module'
@@ -95,16 +94,13 @@
       tags:
         - always
   when: "mongodb_managed_databases | length > 0"
-  register: mongodb_databases_preparation_result
 
 - name: Determine whether MongoDB needs a restart
   ansible.builtin.set_fact:
     mongodb_restart_necessary: >-
       {{
         mongodb_support_files_result.changed | default(false)
-        or mongodb_scripts_result.changed | default(false)
         or mongodb_systemd_service_result.changed | default(false)
         or mongodb_container_image_pull_result_ansible_module.changed | default(false)
         or mongodb_container_image_pull_result_command.changed | default(false)
-        or mongodb_databases_preparation_result.changed | default(false)
       }}
