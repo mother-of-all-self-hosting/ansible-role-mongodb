@@ -10,14 +10,14 @@ SPDX-FileCopyrightText: 2023 Slavi Pantaleev
 
 SPDX-License-Identifier: AGPL-3.0-or-later
 #}
-{{ devture_systemd_docker_base_host_command_docker }} run \
-  --rm \
-  --user={{ mongodb_uid }}:{{ mongodb_gid }} \
-  --cap-drop=ALL \
-  --env-file={{ mongodb_base_path }}/env \
-  --network={{ mongodb_container_network }} \
-  --mount type=bind,src={{ mongodb_data_path }},dst=/data/db \
-  --mount type=bind,src={{ mongodb_base_path }}/mongosh.conf,dst=/etc/mongosh.conf,ro \
-  --entrypoint=/bin/sh \
-  {{ mongodb_container_image }} \
-  -c 'mongosh --host={{ mongodb_identifier }} -u $MONGO_INITDB_ROOT_USERNAME -p $MONGO_INITDB_ROOT_PASSWORD admin '$@
+{#
+Runs mongosh inside the (running) MongoDB container. The first `--eval` authenticates as the superuser
+with the credentials from the container's own environment (see the `env` file), so that they do not appear on any command line.
+Further arguments (e.g. `--eval '…'`) are passed on to mongosh.
+mongosh's home (logs) is pointed at /tmp in the container, so that nothing ends up in the data directory.
+#}
+exec {{ devture_systemd_docker_base_host_command_docker }} exec -i --env HOME=/tmp {{ mongodb_identifier }} \
+  mongosh --quiet \
+  --eval 'db.getSiblingDB("admin").auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD)' \
+  admin \
+  "$@"

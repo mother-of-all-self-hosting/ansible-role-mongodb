@@ -165,6 +165,37 @@
             fail_msg: "MongoDB reports {{ mongodb_version_reported.stdout | default('none') }}, expected {{ mongodb_defaults.mongodb_version }}"
             success_msg: "MongoDB reports {{ mongodb_version_reported.stdout }}"
 
+        # Both scripts authenticate as root via the container's environment, on the `admin` database.
+        - name: Run a query through the MongoDB CLI scripts
+          ansible.builtin.command:
+            argv: "{{ item.argv }}"
+            stdin: "{{ item.stdin | default(omit) }}"
+          register: mongodb_cli_queries
+          changed_when: false
+          loop:
+            - argv:
+                - /mongodb/bin/cli-non-interactive
+                - --eval
+                - >-
+                  db.getName() + " " + JSON.stringify(db.runCommand({connectionStatus: 1}).authInfo.authenticatedUsers)
+            - argv:
+                - /mongodb/bin/cli
+              stdin: >-
+                print("cli: " + db.getName() + " " + JSON.stringify(db.runCommand({connectionStatus: 1}).authInfo.authenticatedUsers))
+
+        - name: Assert the MongoDB CLI scripts work
+          ansible.builtin.assert:
+            that:
+              - >-
+                mongodb_cli_queries.results[0].stdout == 'admin [{"user":"root","db":"admin"}]'
+              - >-
+                mongodb_cli_queries.results[1].stdout is search('cli: admin \[{"user":"root","db":"admin"}\]')
+            fail_msg: >-
+              The CLI scripts did not run a query as root:
+              {{ mongodb_cli_queries.results | map(attribute='stdout') | list }}
+              {{ mongodb_cli_queries.results | map(attribute='stderr') | list }}
+            success_msg: "The CLI scripts run queries as root"
+
         # mongosh only force-disables telemetry on its own when not interactive,
         # so the interactive `cli` relies on the config file being mounted into the container.
         - name: Read the mongosh config in the MongoDB container
