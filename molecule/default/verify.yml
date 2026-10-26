@@ -276,3 +276,6 @@
 
 - name: Verify MongoDB managed databases
   ansible.builtin.import_playbook: verify_managed_databases.yml
+
+- name: Verify dumping and importing MongoDB databases
+  ansible.builtin.import_playbook: verify_dump_and_import.yml

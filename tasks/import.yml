@@ -10,12 +10,12 @@
     msg: "The `mongodb_server_path_dump` variable needs to be provided to this playbook, via --extra-vars"
   when: "mongodb_server_path_dump is not defined or mongodb_server_path_dump.startswith('<')"
 
-- name: Check if the provided dump directory exists
+- name: Check if the provided dump exists
   ansible.builtin.stat:
     path: "{{ mongodb_server_path_dump }}"
   register: result_mongodb_server_path_dump_stat
 
-- name: Fail if provided dump directory does not exist
+- name: Fail if provided dump does not exist
   ansible.builtin.fail:
     msg: "File cannot be found on the server at {{ mongodb_server_path_dump }}"
   when: "not result_mongodb_server_path_dump_stat.stat.exists"
@@ -48,9 +48,16 @@
   delegate_to: 127.0.0.1
   become: false
 
+# The dump is either a file (a gzipped `mongodump --archive`, like `dump-all` makes),
+# which is streamed into mongorestore inside the running MongoDB container,
+# or a directory (a gzipped `mongodump -o`, like `dump-all` used to make), which is mounted into a separate container.
+#
+# Either way, mongorestore runs as the superuser that the container's environment defines.
+# The password goes to it in a config file (as a single-quoted YAML string), so that it does not appear on any command line.
 - name: Generate MongoDB database import command
   ansible.builtin.set_fact:
     mongodb_import_command: >-
+      {% if result_mongodb_server_path_dump_stat.stat.isdir %}
       {{ devture_systemd_docker_base_host_command_docker }} run
       --rm
       --name={{ mongodb_identifier }}-import
@@ -60,11 +67,23 @@
       --network={{ mongodb_container_network }}
       --env-file={{ mongodb_base_path }}/env
       --mount type=bind,src={{ mongodb_server_path_dump }},dst=/in,ro
-      --entrypoint=/bin/sh
+      --entrypoint=/bin/bash
       {{ mongodb_container_image }}
-      -c "mongorestore --host={{ mongodb_identifier }} -u $MONGO_INITDB_ROOT_USERNAME -p $MONGO_INITDB_ROOT_PASSWORD --gzip --dir=/in"
-  tags:
-    - skip_ansible_lint
+      -c {{ mongodb_import_script | quote }}
+      {% else %}
+      {{ devture_systemd_docker_base_host_command_docker }} exec -i {{ mongodb_identifier }}
+      bash -c {{ mongodb_import_script | quote }}
+      < {{ mongodb_server_path_dump | quote }}
+      {% endif %}
+  vars:
+    mongodb_import_script: |-
+      password=$MONGO_INITDB_ROOT_PASSWORD
+      exec mongorestore \
+        --config=<(printf "password: '%s'\n" "${password//\'/\'\'}") \
+        --username="$MONGO_INITDB_ROOT_USERNAME" \
+        --authenticationDatabase=admin \
+        --gzip \
+        {{ ('--host=' ~ mongodb_identifier ~ ' --dir=/in') if result_mongodb_server_path_dump_stat.stat.isdir else '--archive' }}
 
 # This is a hack.
 # See: https://ansibledaily.com/print-to-standard-output-without-escaping/
@@ -81,8 +100,9 @@
       delete its existing data (`rm -rf {{ mongodb_data_path }}`), start it again (`systemctl start {{ mongodb_identifier }}`)
       and manually run the above import command directly on the server.
 
-- name: Perform MongoDB database import
-  ansible.builtin.command:
+# A shell, as an archive is fed to the command on stdin (the redirection is part of `mongodb_import_command`).
+- name: Perform MongoDB database import  # noqa: command-instead-of-shell
+  ansible.builtin.shell:
     cmd: "{{ mongodb_import_command }}"
   async: "{{ mongodb_import_wait_time }}"
   poll: 10

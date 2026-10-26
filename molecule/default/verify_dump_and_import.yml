@@ -1,0 +1,58 @@
+# SPDX-FileCopyrightText: 2026 Slavi Pantaleev
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+---
+- name: Verify dumping and importing MongoDB databases
+  hosts: all
+  become: true
+  gather_facts: false
+
+  vars:
+    mongodb_verify_dump_directory: /root/molecule-dump
+    mongodb_verify_legacy_dump_directory: /root/molecule-legacy-dump
+
+  tasks:
+    - name: Include the variables the MongoDB role relies on
+      ansible.builtin.include_role:
+        name: com.devture.ansible.role.systemd_docker_base
+        public: true
+
+    - name: Ensure the dump directory exists
+      ansible.builtin.file:
+        path: "{{ mongodb_verify_dump_directory }}"
+        state: directory
+        mode: "0700"
+
+    - name: Dump all databases via the dump-all script
+      ansible.builtin.command:
+        cmd: /mongodb/bin/dump-all {{ mongodb_verify_dump_directory }}
+      changed_when: true
+
+    - name: Check that the dump is a complete gzip file
+      ansible.builtin.command:
+        cmd: gzip --test {{ mongodb_verify_dump_directory }}/latest-dump.archive.gz
+      changed_when: false
+
+    # The format `dump-all` used to produce, which importing still supports.
+    # It is made in the container's /tmp (a tmpfs, which `docker cp` cannot see), so it is streamed out via tar.
+    - name: Make a dump in the directory format
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail
+          && mkdir -p {{ mongodb_verify_legacy_dump_directory }}
+          && docker exec mongodb mongodump --quiet
+          -u root -p {{ mongodb_root_password }} --authenticationDatabase admin
+          --gzip -o /tmp/molecule-legacy-dump
+          && docker exec mongodb tar -C /tmp/molecule-legacy-dump -cf - .
+          | tar -C {{ mongodb_verify_legacy_dump_directory }} -xf -
+        executable: /bin/bash
+      changed_when: true
+
+    - name: Verify importing a dump
+      ansible.builtin.include_tasks: tasks/verify_import.yml
+      loop:
+        - "{{ mongodb_verify_dump_directory }}/latest-dump.archive.gz"
+        - "{{ mongodb_verify_legacy_dump_directory }}"
+      loop_control:
+        loop_var: mongodb_verify_dump

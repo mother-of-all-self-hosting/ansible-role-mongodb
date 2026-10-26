@@ -1,0 +1,38 @@
+# SPDX-FileCopyrightText: 2026 Slavi Pantaleev
+#
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+---
+# The document that verify.yml stored in the `molecule` database has to come back from the dump.
+- name: Drop the database whose document the dump holds ({{ mongodb_verify_dump }})
+  ansible.builtin.command:
+    cmd: >-
+      docker exec mongodb mongosh --quiet
+      -u root -p {{ mongodb_root_password }} --authenticationDatabase admin
+      --eval 'db.getSiblingDB("molecule").dropDatabase().ok'
+  register: mongodb_verify_drop
+  changed_when: true
+  failed_when: (mongodb_verify_drop.stdout | trim) != '1'
+
+- name: Import the dump ({{ mongodb_verify_dump }})
+  ansible.builtin.include_role:
+    name: "{{ lookup('env', 'MOLECULE_PROJECT_DIRECTORY') | basename }}"
+    tasks_from: import
+  vars:
+    mongodb_server_path_dump: "{{ mongodb_verify_dump }}"
+
+- name: Read the document back ({{ mongodb_verify_dump }})
+  ansible.builtin.command:
+    cmd: >-
+      docker exec mongodb mongosh --quiet
+      -u root -p {{ mongodb_root_password }} --authenticationDatabase admin
+      --eval 'db.getSiblingDB("molecule").probe.findOne({_id: "molecule-probe"}).value'
+  register: mongodb_verify_imported
+  changed_when: false
+  failed_when: false
+
+- name: Assert the dump was imported ({{ mongodb_verify_dump }})
+  ansible.builtin.assert:
+    that: (mongodb_verify_imported.stdout | trim) == 'molecule-value'
+    fail_msg: "Importing {{ mongodb_verify_dump }} did not bring the document back: {{ mongodb_verify_imported.stdout }}{{ mongodb_verify_imported.stderr }}"
+    success_msg: "Importing {{ mongodb_verify_dump }} brought the document back"

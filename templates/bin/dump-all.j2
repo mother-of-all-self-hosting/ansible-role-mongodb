@@ -12,7 +12,7 @@ SPDX-License-Identifier: AGPL-3.0-or-later
 #}
 if [ $# -ne 1 ]; then
   echo "Usage: "$0" <directory_path>"
-  echo "All databases will be dumped (using mongodump) to the specified directory"
+  echo "A latest-dump.archive.gz file (a gzipped mongodump archive) will be dumped to the specified directory"
   exit 1
 fi
 
@@ -23,20 +23,31 @@ if [ ! -d "$directory_path" ]; then
   exit 1
 fi
 
-docker_flags=''
-if [ -t 1 ]; then
-  # Got tty
-  docker_flags='-it'
+dump_path="$directory_path/latest-dump.archive.gz"
+
+# Runs in the (running) MongoDB container, as the superuser that the container's environment defines,
+# and streams the archive out. The password goes to mongodump in a config file (as a single-quoted YAML string),
+# so that it does not appear on any command line.
+read -r -d '' dump_script <<'EOF'
+password=$MONGO_INITDB_ROOT_PASSWORD
+exec mongodump \
+  --config=<(printf "password: '%s'\n" "${password//\'/\'\'}") \
+  --username="$MONGO_INITDB_ROOT_USERNAME" \
+  --authenticationDatabase=admin \
+  --quiet \
+  --gzip \
+  --archive
+EOF
+
+# The dump goes to a temporary file first, so that a failed dump neither leaves a truncated archive behind
+# (which could be mistaken for a good one) nor destroys the previous dump.
+{{ devture_systemd_docker_base_host_command_docker }} exec {{ mongodb_identifier }} bash -c "$dump_script" > "$dump_path.partial"
+status=$?
+
+if [ $status -ne 0 ]; then
+  rm -f "$dump_path.partial"
+  echo "Dumping failed (exit code $status)." >&2
+  exit $status
 fi
 
-{{ devture_systemd_docker_base_host_command_docker }} run \
-  $docker_flags \
-  --rm \
-  --user={{ mongodb_uid }}:{{ mongodb_gid }} \
-  --cap-drop=ALL \
-  --env-file={{ mongodb_base_path }}/env \
-  --network={{ mongodb_container_network }} \
-  --mount type=bind,src=$directory_path,dst=/out \
-  --entrypoint=/bin/sh \
-  {{ mongodb_container_image }} \
-  -c 'mongodump --host={{ mongodb_identifier }} -u $MONGO_INITDB_ROOT_USERNAME -p $MONGO_INITDB_ROOT_PASSWORD --quiet --gzip -o /out'
+mv "$dump_path.partial" "$dump_path"

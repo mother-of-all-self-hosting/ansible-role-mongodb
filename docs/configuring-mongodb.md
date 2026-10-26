@@ -95,9 +95,12 @@ You can then proceed to write queries. Example: `db.users.find()`
 
 ### Backing up a database
 
-The script to dump the database (`dump-all`) is installed to the directory specified with `mongodb_bin_path`. It can dump the database to a path of your choosing.
+The script to dump the database (`dump-all`) is installed to the directory specified with `mongodb_bin_path`. Given a directory of your choosing, it dumps all databases to a `latest-dump.archive.gz` file in it (a gzipped `mongodump --archive`), replacing any previous one. If dumping fails, the previous dump is left as it was.
 
-Restoring a backup made this way can be done by importing it.
+>[!NOTE]
+> Before, `dump-all` wrote a directory tree (one gzipped file per collection, as `mongodump --gzip -o` does). If you have scripts which work with that tree, adjust them. Dumps in the old format can still be imported (see below).
+
+Restoring a backup made this way can be done by [importing](#importing-a-database) it.
 
 ### Upgrading to a new major release
 
@@ -115,22 +118,25 @@ Taking a backup before upgrading to a new major release is still a good idea.
 
 ## Importing a database
 
-The role supports importing **gzipped** MongoDB database dumps (created with `mongodump --gzip -o /directory`).
+The role supports importing **gzipped** MongoDB database dumps, either:
+
+- a file, created with `mongodump --gzip --archive` (like `dump-all` does), or
+- a directory, created with `mongodump --gzip -o /directory` (like `dump-all` used to do)
 
 ### Prerequisites
 
-Before doing the actual import, your MongoDB dump file needs to be uploaded to the server (any path is okay).
+Before doing the actual import, your MongoDB dump needs to be uploaded to the server (any path is okay).
 
 ### Importing a dump
 
-Run this command to import the dump file. Make sure to replace `SERVER_PATH_TO_MONGODB_DUMP_DIRECTORY` with a file path on your server.
+Run this command to import the dump. Make sure to replace `SERVER_PATH_TO_MONGODB_DUMP` with the path of the dump file (or directory) on your server.
 
 ```sh
-ansible-playbook -i inventory/hosts setup.yml --tags=import-mongodb --extra-vars=mongodb_server_path_dump=SERVER_PATH_TO_MONGODB_DUMP_DIRECTORY
+ansible-playbook -i inventory/hosts setup.yml --tags=import-mongodb --extra-vars=mongodb_server_path_dump=SERVER_PATH_TO_MONGODB_DUMP
 ```
 
 >[!NOTE]
-> `SERVER_PATH_TO_MONGODB_DUMP_DIRECTORY` must be a path to a **gzipped** MongoDB dump directory on the server (not on your local machine!)
+> `SERVER_PATH_TO_MONGODB_DUMP` must be a path to a **gzipped** MongoDB dump on the server (not on your local machine!)
 
 ## Troubleshooting
 
