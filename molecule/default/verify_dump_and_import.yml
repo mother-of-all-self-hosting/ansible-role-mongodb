@@ -29,6 +29,17 @@
         cmd: /mongodb/bin/dump-all {{ mongodb_verify_dump_directory }}
       changed_when: true
 
+    - name: Check the mode of the dump
+      ansible.builtin.stat:
+        path: "{{ mongodb_verify_dump_directory }}/latest-dump.archive.gz"
+      register: mongodb_verify_dump_stat
+
+    - name: Assert only the caller can read the dump
+      ansible.builtin.assert:
+        that: mongodb_verify_dump_stat.stat.mode == '0600'
+        fail_msg: "The dump's mode is {{ mongodb_verify_dump_stat.stat.mode }}, expected 0600"
+        success_msg: "Only the caller can read the dump"
+
     - name: Check that the dump is a complete gzip file
       ansible.builtin.command:
         cmd: gzip --test {{ mongodb_verify_dump_directory }}/latest-dump.archive.gz
