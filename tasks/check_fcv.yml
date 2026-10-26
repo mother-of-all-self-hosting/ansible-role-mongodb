@@ -49,16 +49,19 @@
           Start MongoDB and re-run, or disable this check by setting `mongodb_fcv_check_enabled: false`.
       when: mongodb_fcv_check_container_ps.stdout | trim | length == 0
 
-    # The credentials are resolved inside the container (from its environment),
-    # so that they do not appear on the command line here.
+    # The script (on stdin) authenticates with the credentials from the container's environment,
+    # so that they do not appear on any command line.
+    # mongosh's home is pointed at /tmp (a tmpfs), so that it does not leave its logs in the data directory.
     #
     # mongod may still be starting up (e.g. right after a restart), hence the retries.
     - name: Query the running MongoDB for its release and FCV
       ansible.builtin.command:
         cmd: >-
-          {{ devture_systemd_docker_base_host_command_docker }} exec {{ mongodb_identifier }}
-          sh -c 'exec mongosh --quiet -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "$0"'
-          'print(JSON.stringify({version: db.version(), fcv: db.adminCommand({getParameter: 1, featureCompatibilityVersion: 1}).featureCompatibilityVersion}))'
+          {{ devture_systemd_docker_base_host_command_docker }} exec -i --env HOME=/tmp {{ mongodb_identifier }}
+          mongosh --quiet --file /dev/stdin
+        stdin: |-
+          db.getSiblingDB('admin').auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD);
+          print(JSON.stringify({version: db.version(), fcv: db.adminCommand({getParameter: 1, featureCompatibilityVersion: 1}).featureCompatibilityVersion}));
       register: mongodb_fcv_check_query
       changed_when: false
       check_mode: false
@@ -179,9 +182,11 @@
     - name: Set the MongoDB FCV to {{ mongodb_fcv_check_desired }}
       ansible.builtin.command:
         cmd: >-
-          {{ devture_systemd_docker_base_host_command_docker }} exec {{ mongodb_identifier }}
-          sh -c 'exec mongosh --quiet -u "$MONGO_INITDB_ROOT_USERNAME" -p "$MONGO_INITDB_ROOT_PASSWORD" --authenticationDatabase admin --eval "$0"'
-          'print(JSON.stringify(db.adminCommand({setFeatureCompatibilityVersion: "{{ mongodb_fcv_check_desired }}"{{ ", confirm: true" if mongodb_fcv_check_running_release is version("7.0", ">=") else "" }}})))'
+          {{ devture_systemd_docker_base_host_command_docker }} exec -i --env HOME=/tmp {{ mongodb_identifier }}
+          mongosh --quiet --file /dev/stdin
+        stdin: |-
+          db.getSiblingDB('admin').auth(process.env.MONGO_INITDB_ROOT_USERNAME, process.env.MONGO_INITDB_ROOT_PASSWORD);
+          print(JSON.stringify(db.adminCommand({setFeatureCompatibilityVersion: "{{ mongodb_fcv_check_desired }}"{{ ", confirm: true" if mongodb_fcv_check_running_release is version("7.0", ">=") else "" }}})));
       register: mongodb_fcv_check_set_result
       changed_when: true
       failed_when: >-
