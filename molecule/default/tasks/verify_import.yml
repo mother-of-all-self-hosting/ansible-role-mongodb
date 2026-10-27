@@ -4,15 +4,17 @@
 
 ---
 # The document that verify.yml stored in the `molecule` database has to come back from the dump.
-- name: Drop the database whose document the dump holds ({{ mongodb_verify_dump }})
+# The import stops at the first document it cannot restore, so every database the dump holds is dropped first
+# (not just `molecule`), as the documents still there would fail with duplicate keys.
+- name: Drop the databases the dump holds ({{ mongodb_verify_dump }})
   ansible.builtin.command:
     cmd: >-
       docker exec mongodb mongosh --quiet
       -u root -p {{ mongodb_root_password }} --authenticationDatabase admin
-      --eval 'db.getSiblingDB("molecule").dropDatabase().ok'
+      --eval 'db.adminCommand({listDatabases: 1, nameOnly: true}).databases.map((d) => d.name).filter((name) => !["admin", "config", "local"].includes(name)).every((name) => db.getSiblingDB(name).dropDatabase().ok === 1)'
   register: mongodb_verify_drop
   changed_when: true
-  failed_when: (mongodb_verify_drop.stdout | trim) != '1'
+  failed_when: (mongodb_verify_drop.stdout | trim) != 'true'
 
 - name: Import the dump ({{ mongodb_verify_dump }})
   ansible.builtin.include_role:
