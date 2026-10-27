@@ -83,6 +83,7 @@
         --username="$MONGO_INITDB_ROOT_USERNAME" \
         --authenticationDatabase=admin \
         --gzip \
+        --stopOnError \
         {{ ('--host=' ~ mongodb_identifier ~ ' --dir=/in') if result_mongodb_server_path_dump_stat.stat.isdir else '--archive' }}
 
 # This is a hack.

@@ -138,6 +138,8 @@ ansible-playbook -i inventory/hosts setup.yml --tags=import-mongodb --extra-vars
 >[!NOTE]
 > `SERVER_PATH_TO_MONGODB_DUMP` must be a path to a **gzipped** MongoDB dump on the server (not on your local machine!)
 
+The import stops at the first document that cannot be restored (e.g. one failing validation, or a duplicate key when importing into a non-empty database) and fails, instead of finishing with an incomplete copy.
+
 ## Troubleshooting
 
 ### Check the service's logs
