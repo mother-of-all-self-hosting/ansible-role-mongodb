@@ -76,6 +76,29 @@ jobs:
           path: ~/.ansible/collections
           key: ansible-collections-${{ hashFiles('mongodb/molecule/*/requirements.yml') }}
 
+      # The upgrade scenario seeds the release before the pinned one (8.3 for
+      # 9.0), and MongoDB releases before 9.0 refuse to start on the runner's
+      # kernel (https://jira.mongodb.org/browse/SERVER-121912). Skip the
+      # scenario while 9.0 is pinned. Once a later release is pinned, its seed
+      # (9.0 or later) can start, so this step fails as a reminder to remove it.
+      - name: Skip the upgrade scenario while its seed cannot start
+        id: upgrade_guard
+        if: matrix.scenario == 'upgrade'
+        working-directory: mongodb
+        run: |
+          version="$(sed -n 's/^mongodb_version: *//p' defaults/main.yml)"
+          case "$version" in
+            9.0.*)
+              echo "::notice::Skipping the upgrade scenario: its seed release cannot start on the runner's kernel (SERVER-121912)"
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::mongodb_version is now ${version}, so the upgrade scenario's seed can start again. Remove this step from .github/workflows/molecule.yml to re-enable the scenario."
+              exit 1
+              ;;
+          esac
+
       - name: Run Molecule
+        if: steps.upgrade_guard.outputs.skip != 'true'
         working-directory: mongodb
         run: molecule test --scenario-name ${{ matrix.scenario }}
