@@ -76,11 +76,21 @@ jobs:
           path: ~/.ansible/collections
           key: ansible-collections-${{ hashFiles('mongodb/molecule/*/requirements.yml') }}
 
-      # The upgrade scenario seeds the release before the pinned one (8.3 for
-      # 9.0), and MongoDB releases before 9.0 refuse to start on the runner's
-      # kernel (https://jira.mongodb.org/browse/SERVER-121912). Skip the
-      # scenario while 9.0 is pinned. Once a later release is pinned, its seed
-      # (9.0 or later) can start, so this step fails as a reminder to remove it.
+      # The runner ships AppArmor profiles for individual programs (wg-quick, mosquitto, ...),
+      # which attach by path.
+      # Docker inside the Molecule instance cannot confine its containers with AppArmor,
+      # so those profiles end up applying to the programs inside the containers under test and break them.
+      # On a real host, Docker's own profile confines the containers,
+      # so the host's per-program profiles do not attach.
+      - name: Unload the runner's AppArmor profiles
+        run: sudo aa-teardown
+
+      # The upgrade scenario seeds the release before the pinned one (8.3 for 9.0),
+      # and MongoDB releases before 9.0 refuse to start on the runner's kernel
+      # (https://jira.mongodb.org/browse/SERVER-121912).
+      # Skip the scenario while 9.0 is pinned.
+      # Once a later release is pinned, its seed (9.0 or later) can start,
+      # so this step fails as a reminder to remove it.
       - name: Skip the upgrade scenario while its seed cannot start
         id: upgrade_guard
         if: matrix.scenario == 'upgrade'
